@@ -44,8 +44,8 @@ export class VideoSessionComponent implements OnInit {
 
 
         // 1) Initialize OpenVidu and your Session
-        this.OV = new OpenVidu("wss://" + location.hostname + ":8443/");
-        this.session = this.OV.initSession("apikey", this.sessionId);
+        this.OV = new OpenVidu();
+        this.session = this.OV.initSession(this.sessionId);
 
 
         // 2) Specify the actions when events take place

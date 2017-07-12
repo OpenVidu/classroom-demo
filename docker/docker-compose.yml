@@ -1,0 +1,27 @@
+version: '2'
+
+services:
+
+  demo-mysql:
+    image: mysql:latest
+    environment:
+      - MYSQL_ROOT_PASSWORD=pass
+      - MYSQL_DATABASE=openvidu_sample_app
+      - MYSQL_USER=op-root
+      - MYSQL_PASSWORD=pass
+
+  service-classroom-demo:
+    image: openvidu/classroom-demo
+    links:
+      - demo-mysql:mysql
+    ports:
+      - 5000:5000
+      - 3000:3000
+    environment:
+      - WAIT_HOSTS=mysql:3306
+      - WAIT_HOSTS_TIMEOUT=120
+      - KMS_STUN_IP=193.147.51.12
+      - KMS_STUN_PORT=3478
+      - openvidu.security=true
+      - openvidu.secret=MY_SECRET
+  
