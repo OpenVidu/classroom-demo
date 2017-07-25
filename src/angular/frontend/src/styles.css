@@ -75,13 +75,13 @@ md-icon:hover {
   width: 100%;
 }
 
-#subscriber {
+/*#subscriber {
   position: absolute;
   bottom: 0;
-}
+}*/
 
 #subscriber video {
-  width: 350px;
+  width: 100%;
 }
 
 
