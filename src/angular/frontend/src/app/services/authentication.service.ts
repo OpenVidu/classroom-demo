@@ -12,8 +12,8 @@ import { User } from '../models/user';
 @Injectable()
 export class AuthenticationService {
 
-    private urlLogIn = environment.URL_BACK + '/api-logIn';
-    private urlLogOut = environment.URL_BACK + '/api-logOut';
+    private urlLogIn = 'api-logIn';
+    private urlLogOut = 'api-logOut';
 
     public token: string;
     private user: User;

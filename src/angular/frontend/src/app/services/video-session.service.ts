@@ -12,12 +12,14 @@ export class VideoSessionService {
     lesson: Lesson;
     cameraOptions: any;
 
+    private url = 'api-sessions';
+
     constructor(private http: Http, private authenticationService: AuthenticationService) { }
 
     // Returns {0: sessionId}
     createSession(lessonId: number) {
         let body = JSON.stringify(lessonId);
-        return this.http.post('/api-sessions/create-session', body)
+        return this.http.post(this.url + '/create-session', body)
             .map(response => response.json())
             .catch(error => this.handleError(error));
     }
@@ -27,7 +29,7 @@ export class VideoSessionService {
         let body = JSON.stringify(lessonId);
         let headers = new Headers({ 'Content-Type': 'application/json' });
         let options = new RequestOptions({ headers });
-        return this.http.post('/api-sessions/generate-token', body, options)
+        return this.http.post(this.url + '/generate-token', body, options)
             .map(response => response.json())
             .catch(error => this.handleError(error));
     }
@@ -36,7 +38,7 @@ export class VideoSessionService {
         let body = JSON.stringify(lessonId);
         let headers = new Headers({ 'Content-Type': 'application/json' });
         let options = new RequestOptions({ headers });
-        return this.http.post('/api-sessions/remove-user', body, options)
+        return this.http.post(this.url + '/remove-user', body, options)
             .map(response => response)
             .catch(error => this.handleError(error));
     }

@@ -12,7 +12,7 @@ import 'rxjs/Rx';
 @Injectable()
 export class LessonService {
 
-    private url = environment.URL_BACK + '/api-lessons';
+    private url = 'api-lessons';
 
     constructor(private http: Http, private authenticationService: AuthenticationService) { }
 
