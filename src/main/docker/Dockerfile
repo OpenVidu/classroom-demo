@@ -1,6 +1,6 @@
 FROM java:8
 VOLUME /tmp
-ADD openvidu-sample-app-0.0.1-SNAPSHOT.war openvidu-sample-app.war
+ADD openvidu-sample-app-1.0.0-beta.1.war openvidu-sample-app.war
 ADD wrapper.sh wrapper.sh
 RUN bash -c 'chmod +x /wrapper.sh'
 RUN bash -c 'touch /openvidu-sample-app.war'
