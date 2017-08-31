@@ -22,6 +22,5 @@ services:
       - WAIT_HOSTS_TIMEOUT=120
       - KMS_STUN_IP=193.147.51.12
       - KMS_STUN_PORT=3478
-      - openvidu.security=true
       - openvidu.secret=MY_SECRET
   
