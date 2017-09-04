@@ -1,5 +1,931 @@
 webpackJsonp([1,4],{
 
+/***/ 1119:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+/*
+ * (C) Copyright 2016 OpenVidu (http://kurento.org/)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+var OpenViduInternal_1 = __webpack_require__(1121);
+var Session_1 = __webpack_require__(555);
+var Publisher_1 = __webpack_require__(554);
+var adapter = __webpack_require__(561);
+if (window) {
+    window["adapter"] = adapter;
+}
+var OpenVidu = (function () {
+    function OpenVidu() {
+        this.openVidu = new OpenViduInternal_1.OpenViduInternal();
+    }
+    ;
+    OpenVidu.prototype.initSession = function (param1, param2) {
+        if (this.checkSystemRequirements()) {
+            if (typeof param2 == "string") {
+                return new Session_1.Session(this.openVidu.initSession(param2), this);
+            }
+            else {
+                return new Session_1.Session(this.openVidu.initSession(param1), this);
+            }
+        }
+        else {
+            alert("Browser not supported");
+        }
+    };
+    OpenVidu.prototype.initPublisher = function (parentId, cameraOptions, callback) {
+        if (this.checkSystemRequirements()) {
+            if (cameraOptions != null) {
+                var cameraOptionsAux = {
+                    audio: cameraOptions.audio != null ? cameraOptions.audio : true,
+                    video: cameraOptions.video != null ? cameraOptions.video : true,
+                    data: true,
+                    mediaConstraints: this.openVidu.generateMediaConstraints(cameraOptions.quality)
+                };
+                cameraOptions = cameraOptionsAux;
+            }
+            else {
+                cameraOptions = {
+                    audio: true,
+                    video: true,
+                    data: true,
+                    mediaConstraints: {
+                        audio: true,
+                        video: { width: { ideal: 1280 } }
+                    }
+                };
+            }
+            return new Publisher_1.Publisher(this.openVidu.initPublisherTagged(parentId, cameraOptions, callback), parentId);
+        }
+        else {
+            alert("Browser not supported");
+        }
+    };
+    OpenVidu.prototype.checkSystemRequirements = function () {
+        var browser = adapter.browserDetails.browser;
+        var version = adapter.browserDetails.version;
+        //Bug fix: 'navigator.userAgent' in Firefox for Ubuntu 14.04 does not return "Firefox/[version]" in the string, so version returned is null
+        if ((browser == 'firefox') && (version == null)) {
+            return 1;
+        }
+        if (((browser == 'chrome') && (version >= 28)) || ((browser == 'edge') && (version >= 12)) || ((browser == 'firefox') && (version >= 22))) {
+            return 1;
+        }
+        else {
+            return 0;
+        }
+    };
+    OpenVidu.prototype.getDevices = function (callback) {
+        navigator.mediaDevices.enumerateDevices().then(function (deviceInfos) {
+            callback(null, deviceInfos);
+        }).catch(function (error) {
+            console.log("Error getting devices: " + error);
+            callback(error, null);
+        });
+    };
+    return OpenVidu;
+}());
+exports.OpenVidu = OpenVidu;
+
+
+/***/ }),
+
+/***/ 1120:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+function __export(m) {
+    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+}
+Object.defineProperty(exports, "__esModule", { value: true });
+__export(__webpack_require__(1119));
+__export(__webpack_require__(555));
+__export(__webpack_require__(554));
+__export(__webpack_require__(556));
+__export(__webpack_require__(325));
+__export(__webpack_require__(557));
+
+
+/***/ }),
+
+/***/ 1121:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+/*
+ * (C) Copyright 2016 OpenVidu (http://kurento.org/)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+var SessionInternal_1 = __webpack_require__(1122);
+var Stream_1 = __webpack_require__(325);
+var RpcBuilder = __webpack_require__(500);
+var OpenViduInternal = (function () {
+    function OpenViduInternal() {
+        this.remoteStreams = [];
+    }
+    ;
+    /* NEW METHODS */
+    OpenViduInternal.prototype.initSession = function (sessionId) {
+        console.log("Session initialized!");
+        this.session = new SessionInternal_1.SessionInternal(this, sessionId);
+        return this.session;
+    };
+    OpenViduInternal.prototype.initPublisherTagged = function (parentId, cameraOptions, callback) {
+        var _this = this;
+        console.log("Publisher tagged initialized!");
+        this.getCamera(cameraOptions);
+        if (callback == null) {
+            this.camera.requestCameraAccess(function (error, camera) {
+                if (error) {
+                    console.log("Error accessing the camera");
+                }
+                else {
+                    _this.camera.setVideoElement(_this.cameraReady(camera, parentId));
+                }
+            });
+            return this.camera;
+        }
+        else {
+            this.camera.requestCameraAccess(function (error, camera) {
+                if (error) {
+                    callback(error);
+                }
+                else {
+                    _this.camera.setVideoElement(_this.cameraReady(camera, parentId));
+                    callback(undefined);
+                }
+            });
+            return this.camera;
+        }
+    };
+    OpenViduInternal.prototype.cameraReady = function (camera, parentId) {
+        this.camera = camera;
+        var videoElement = this.camera.playOnlyVideo(parentId, null);
+        this.camera.emitStreamReadyEvent();
+        return videoElement;
+    };
+    OpenViduInternal.prototype.initPublisher = function (cameraOptions, callback) {
+        console.log("Publisher initialized!");
+        this.getCamera(cameraOptions);
+        this.camera.requestCameraAccess(function (error, camera) {
+            if (error)
+                callback(error);
+            else
+                callback(undefined);
+        });
+    };
+    OpenViduInternal.prototype.getLocalStream = function () {
+        return this.camera;
+    };
+    OpenViduInternal.prototype.getRemoteStreams = function () {
+        return this.remoteStreams;
+    };
+    /* NEW METHODS */
+    OpenViduInternal.prototype.getWsUri = function () {
+        return this.wsUri;
+    };
+    OpenViduInternal.prototype.setWsUri = function (wsUri) {
+        this.wsUri = wsUri;
+    };
+    OpenViduInternal.prototype.getSecret = function () {
+        return this.secret;
+    };
+    OpenViduInternal.prototype.setSecret = function (secret) {
+        this.secret = secret;
+    };
+    OpenViduInternal.prototype.getOpenViduServerURL = function () {
+        return 'https://' + this.wsUri.split("wss://")[1].split("/room")[0];
+    };
+    OpenViduInternal.prototype.getRoom = function () {
+        return this.session;
+    };
+    OpenViduInternal.prototype.connect = function (callback) {
+        this.callback = callback;
+        this.initJsonRpcClient(this.wsUri);
+    };
+    OpenViduInternal.prototype.initJsonRpcClient = function (wsUri) {
+        var config = {
+            heartbeat: 3000,
+            sendCloseMessage: false,
+            ws: {
+                uri: wsUri,
+                useSockJS: false,
+                onconnected: this.connectCallback.bind(this),
+                ondisconnect: this.disconnectCallback.bind(this),
+                onreconnecting: this.reconnectingCallback.bind(this),
+                onreconnected: this.reconnectedCallback.bind(this)
+            },
+            rpc: {
+                requestTimeout: 15000,
+                //notifications
+                participantJoined: this.onParticipantJoined.bind(this),
+                participantPublished: this.onParticipantPublished.bind(this),
+                participantUnpublished: this.onParticipantLeft.bind(this),
+                participantLeft: this.onParticipantLeft.bind(this),
+                participantEvicted: this.onParticipantEvicted.bind(this),
+                sendMessage: this.onNewMessage.bind(this),
+                iceCandidate: this.iceCandidateEvent.bind(this),
+                mediaError: this.onMediaError.bind(this),
+                custonNotification: this.customNotification.bind(this)
+            }
+        };
+        this.jsonRpcClient = new RpcBuilder.clients.JsonRpcClient(config);
+    };
+    OpenViduInternal.prototype.customNotification = function (params) {
+        if (this.isRoomAvailable()) {
+            this.session.emitEvent("custom-message-received", [{ params: params }]);
+        }
+    };
+    OpenViduInternal.prototype.connectCallback = function (error) {
+        if (error) {
+            this.callback(error);
+        }
+        else {
+            this.callback(null);
+        }
+    };
+    OpenViduInternal.prototype.isRoomAvailable = function () {
+        if (this.session !== undefined && this.session instanceof SessionInternal_1.SessionInternal) {
+            return true;
+        }
+        else {
+            console.warn('Room instance not found');
+            return false;
+        }
+    };
+    OpenViduInternal.prototype.disconnectCallback = function () {
+        console.log('Websocket connection lost');
+        if (this.isRoomAvailable()) {
+            this.session.onLostConnection();
+        }
+        else {
+            alert('Connection error. Please reload page.');
+        }
+    };
+    OpenViduInternal.prototype.reconnectingCallback = function () {
+        console.log('Websocket connection lost (reconnecting)');
+        if (this.isRoomAvailable()) {
+            this.session.onLostConnection();
+        }
+        else {
+            alert('Connection error. Please reload page.');
+        }
+    };
+    OpenViduInternal.prototype.reconnectedCallback = function () {
+        console.log('Websocket reconnected');
+    };
+    OpenViduInternal.prototype.onParticipantJoined = function (params) {
+        if (this.isRoomAvailable()) {
+            this.session.onParticipantJoined(params);
+        }
+    };
+    OpenViduInternal.prototype.onParticipantPublished = function (params) {
+        if (this.isRoomAvailable()) {
+            this.session.onParticipantPublished(params);
+        }
+    };
+    OpenViduInternal.prototype.onParticipantLeft = function (params) {
+        if (this.isRoomAvailable()) {
+            this.session.onParticipantLeft(params);
+        }
+    };
+    OpenViduInternal.prototype.onParticipantEvicted = function (params) {
+        if (this.isRoomAvailable()) {
+            this.session.onParticipantEvicted(params);
+        }
+    };
+    OpenViduInternal.prototype.onNewMessage = function (params) {
+        if (this.isRoomAvailable()) {
+            this.session.onNewMessage(params);
+        }
+    };
+    OpenViduInternal.prototype.iceCandidateEvent = function (params) {
+        if (this.isRoomAvailable()) {
+            this.session.recvIceCandidate(params);
+        }
+    };
+    OpenViduInternal.prototype.onRoomClosed = function (params) {
+        if (this.isRoomAvailable()) {
+            this.session.onRoomClosed(params);
+        }
+    };
+    OpenViduInternal.prototype.onMediaError = function (params) {
+        if (this.isRoomAvailable()) {
+            this.session.onMediaError(params);
+        }
+    };
+    OpenViduInternal.prototype.setRpcParams = function (params) {
+        this.rpcParams = params;
+    };
+    OpenViduInternal.prototype.sendRequest = function (method, params, callback) {
+        if (params && params instanceof Function) {
+            callback = params;
+            params = undefined;
+        }
+        params = params || {};
+        if (this.rpcParams && this.rpcParams !== null && this.rpcParams !== undefined) {
+            for (var index in this.rpcParams) {
+                if (this.rpcParams.hasOwnProperty(index)) {
+                    params[index] = this.rpcParams[index];
+                    console.log('RPC param added to request {' + index + ': ' + this.rpcParams[index] + '}');
+                }
+            }
+        }
+        console.log('Sending request: { method:"' + method + '", params: ' + JSON.stringify(params) + ' }');
+        this.jsonRpcClient.send(method, params, callback);
+    };
+    OpenViduInternal.prototype.close = function (forced) {
+        if (this.isRoomAvailable()) {
+            this.session.leave(forced, this.jsonRpcClient);
+        }
+    };
+    ;
+    OpenViduInternal.prototype.disconnectParticipant = function (stream) {
+        if (this.isRoomAvailable()) {
+            this.session.disconnect(stream);
+        }
+    };
+    OpenViduInternal.prototype.getCamera = function (options) {
+        if (this.camera) {
+            return this.camera;
+        }
+        options = options || {
+            audio: true,
+            video: true,
+            data: true,
+            mediaConstraints: {
+                audio: true,
+                video: { width: { ideal: 1280 } }
+            }
+        };
+        options.connection = this.session.getLocalParticipant();
+        this.camera = new Stream_1.Stream(this, true, this.session, options);
+        return this.camera;
+    };
+    ;
+    /*joinSession(options: SessionOptions, callback: Callback<Session>) {
+        
+        this.session.configure(options);
+        
+        this.session.connect2();
+        
+        this.session.addEventListener('room-connected', roomEvent => callback(undefined,this.session));
+        
+        this.session.addEventListener('error-room', error => callback(error));
+        
+        return this.session;
+    };*/
+    //CHAT
+    OpenViduInternal.prototype.sendMessage = function (room, user, message) {
+        this.sendRequest('sendMessage', {
+            message: message,
+            userMessage: user,
+            roomMessage: room
+        }, function (error, response) {
+            if (error) {
+                console.error(error);
+            }
+        });
+    };
+    ;
+    OpenViduInternal.prototype.sendCustomRequest = function (params, callback) {
+        this.sendRequest('customRequest', params, callback);
+    };
+    ;
+    OpenViduInternal.prototype.toggleLocalVideoTrack = function (activate) {
+        this.getCamera().getWebRtcPeer().videoEnabled = activate;
+    };
+    OpenViduInternal.prototype.toggleLocalAudioTrack = function (activate) {
+        this.getCamera().getWebRtcPeer().audioEnabled = activate;
+    };
+    OpenViduInternal.prototype.publishLocalVideoAudio = function () {
+        this.toggleLocalVideoTrack(true);
+        this.toggleLocalAudioTrack(true);
+    };
+    OpenViduInternal.prototype.unpublishLocalVideoAudio = function () {
+        this.toggleLocalVideoTrack(false);
+        this.toggleLocalAudioTrack(false);
+    };
+    OpenViduInternal.prototype.generateMediaConstraints = function (quality) {
+        var mediaConstraints = {
+            audio: true,
+            video: {}
+        };
+        var w, h;
+        switch (quality) {
+            case 'LOW':
+                w = 320;
+                h = 240;
+                break;
+            case 'MEDIUM':
+                w = 640;
+                h = 480;
+                break;
+            case 'HIGH':
+                w = 1280;
+                h = 720;
+                break;
+            default:
+                w = 640;
+                h = 480;
+        }
+        mediaConstraints.video['width'] = { exact: w };
+        mediaConstraints.video['height'] = { exact: h };
+        //mediaConstraints.video['frameRate'] = { ideal: Number((<HTMLInputElement>document.getElementById('frameRate')).value) };
+        return mediaConstraints;
+    };
+    return OpenViduInternal;
+}());
+exports.OpenViduInternal = OpenViduInternal;
+
+
+/***/ }),
+
+/***/ 1122:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+var Connection_1 = __webpack_require__(557);
+var EventEmitter = __webpack_require__(147);
+var SECRET_PARAM = '?secret=';
+var SessionInternal = (function () {
+    function SessionInternal(openVidu, sessionId) {
+        this.openVidu = openVidu;
+        this.ee = new EventEmitter();
+        this.streams = {};
+        this.participants = {};
+        this.participantsSpeaking = [];
+        this.connected = false;
+        this.sessionId = this.getUrlWithoutSecret(sessionId);
+        this.localParticipant = new Connection_1.Connection(this.openVidu, true, this);
+        if (!this.openVidu.getWsUri()) {
+            this.processOpenViduUrl(sessionId);
+        }
+    }
+    SessionInternal.prototype.processOpenViduUrl = function (url) {
+        this.openVidu.setSecret(this.getSecretFromUrl(url));
+        this.openVidu.setWsUri(this.getFinalUrl(url));
+    };
+    SessionInternal.prototype.getSecretFromUrl = function (url) {
+        var secret = '';
+        if (url.indexOf(SECRET_PARAM) !== -1) {
+            secret = url.substring(url.lastIndexOf(SECRET_PARAM) + SECRET_PARAM.length, url.length);
+        }
+        return secret;
+    };
+    SessionInternal.prototype.getUrlWithoutSecret = function (url) {
+        if (url.indexOf(SECRET_PARAM) !== -1) {
+            url = url.substring(0, url.lastIndexOf(SECRET_PARAM));
+        }
+        return url;
+    };
+    SessionInternal.prototype.getFinalUrl = function (url) {
+        url = this.getUrlWithoutSecret(url).substring(0, url.lastIndexOf('/')) + '/room';
+        if (url.indexOf(".ngrok.io") !== -1) {
+            // OpenVidu server URL referes to a ngrok IP: secure wss protocol and delete port of URL
+            url = url.replace("ws://", "wss://");
+            var regex = /\.ngrok\.io:\d+/;
+            url = url.replace(regex, ".ngrok.io");
+        }
+        else if ((url.indexOf("localhost") !== -1) || (url.indexOf("127.0.0.1") != -1)) {
+            // OpenVidu server URL referes to localhost IP
+        }
+        return url;
+    };
+    /* NEW METHODS */
+    SessionInternal.prototype.connect = function (token, callback) {
+        var _this = this;
+        this.openVidu.connect(function (error) {
+            if (error) {
+                callback('ERROR CONNECTING TO OPENVIDU');
+            }
+            else {
+                var joinParams = {
+                    token: token,
+                    session: _this.sessionId,
+                    metadata: _this.options.metadata,
+                    secret: _this.openVidu.getSecret(),
+                    dataChannels: false
+                };
+                if (_this.localParticipant) {
+                    if (Object.keys(_this.localParticipant.getStreams()).some(function (streamId) {
+                        return _this.streams[streamId].isDataChannelEnabled();
+                    })) {
+                        joinParams.dataChannels = true;
+                    }
+                }
+                _this.openVidu.sendRequest('joinRoom', joinParams, function (error, response) {
+                    if (error) {
+                        callback(error);
+                    }
+                    else {
+                        _this.connected = true;
+                        var exParticipants = response.value;
+                        // IMPORTANT: Update connectionId with value send by server
+                        _this.localParticipant.connectionId = response.id;
+                        _this.participants[response.id] = _this.localParticipant;
+                        var roomEvent = {
+                            participants: new Array(),
+                            streams: new Array()
+                        };
+                        var length_1 = exParticipants.length;
+                        for (var i = 0; i < length_1; i++) {
+                            var connection = new Connection_1.Connection(_this.openVidu, false, _this, exParticipants[i]);
+                            connection.creationTime = new Date().getTime();
+                            _this.participants[connection.connectionId] = connection;
+                            roomEvent.participants.push(connection);
+                            var streams = connection.getStreams();
+                            for (var key in streams) {
+                                roomEvent.streams.push(streams[key]);
+                                if (_this.subscribeToStreams) {
+                                    streams[key].subscribe();
+                                }
+                            }
+                        }
+                        // Update local Connection object properties with values returned by server
+                        _this.localParticipant.data = response.metadata;
+                        _this.localParticipant.creationTime = new Date().getTime();
+                        // Updates the value of property 'connection' in Session object
+                        _this.ee.emitEvent('update-connection-object', [{ connection: _this.localParticipant }]);
+                        // Own connection created event
+                        _this.ee.emitEvent('connectionCreated', [{ connection: _this.localParticipant }]);
+                        // One connection created event for each existing connection in the session
+                        for (var _i = 0, _a = roomEvent.participants; _i < _a.length; _i++) {
+                            var part = _a[_i];
+                            _this.ee.emitEvent('connectionCreated', [{ connection: part }]);
+                        }
+                        //if (this.subscribeToStreams) {
+                        for (var _b = 0, _c = roomEvent.streams; _b < _c.length; _b++) {
+                            var stream = _c[_b];
+                            _this.ee.emitEvent('streamCreated', [{ stream: stream }]);
+                            // Adding the remote stream to the OpenVidu object
+                            _this.openVidu.getRemoteStreams().push(stream);
+                        }
+                        //}
+                        callback(undefined);
+                    }
+                });
+            }
+        });
+    };
+    SessionInternal.prototype.publish = function () {
+        this.openVidu.getCamera().publish();
+    };
+    /* NEW METHODS */
+    SessionInternal.prototype.configure = function (options) {
+        this.options = options;
+        this.id = options.sessionId;
+        this.subscribeToStreams = options.subscribeToStreams == null ? true : options.subscribeToStreams;
+        this.updateSpeakerInterval = options.updateSpeakerInterval || 1500;
+        this.thresholdSpeaker = options.thresholdSpeaker || -50;
+        this.activateUpdateMainSpeaker();
+    };
+    SessionInternal.prototype.getId = function () {
+        return this.id;
+    };
+    SessionInternal.prototype.getSessionId = function () {
+        return this.sessionId;
+    };
+    SessionInternal.prototype.activateUpdateMainSpeaker = function () {
+        var _this = this;
+        setInterval(function () {
+            if (_this.participantsSpeaking.length > 0) {
+                _this.ee.emitEvent('update-main-speaker', [{
+                        participantId: _this.participantsSpeaking[_this.participantsSpeaking.length - 1]
+                    }]);
+            }
+        }, this.updateSpeakerInterval);
+    };
+    SessionInternal.prototype.getLocalParticipant = function () {
+        return this.localParticipant;
+    };
+    SessionInternal.prototype.addEventListener = function (eventName, listener) {
+        this.ee.on(eventName, listener);
+    };
+    SessionInternal.prototype.addOnceEventListener = function (eventName, listener) {
+        this.ee.once(eventName, listener);
+    };
+    SessionInternal.prototype.removeListener = function (eventName, listener) {
+        this.ee.off(eventName, listener);
+    };
+    SessionInternal.prototype.removeEvent = function (eventName) {
+        this.ee.removeEvent(eventName);
+    };
+    SessionInternal.prototype.emitEvent = function (eventName, eventsArray) {
+        this.ee.emitEvent(eventName, eventsArray);
+    };
+    SessionInternal.prototype.subscribe = function (stream) {
+        stream.subscribe();
+    };
+    SessionInternal.prototype.unsuscribe = function (stream) {
+        console.log("Unsubscribing from " + stream.getId());
+        this.openVidu.sendRequest('unsubscribeFromVideo', {
+            sender: stream.getId()
+        }, function (error, response) {
+            if (error) {
+                console.error(error);
+            }
+            else {
+                console.info("Unsubscribed correctly from " + stream.getId());
+            }
+        });
+    };
+    SessionInternal.prototype.onParticipantPublished = function (options) {
+        options.metadata = this.participants[options.id].data;
+        var connection = new Connection_1.Connection(this.openVidu, false, this, options);
+        var pid = connection.connectionId;
+        if (!(pid in this.participants)) {
+            console.info("Publisher not found in participants list by its id", pid);
+        }
+        else {
+            console.log("Publisher found in participants list by its id", pid);
+        }
+        //replacing old connection (this one has streams)
+        connection.creationTime = this.participants[pid].creationTime;
+        this.participants[pid] = connection;
+        this.ee.emitEvent('participant-published', [{ connection: connection }]);
+        var streams = connection.getStreams();
+        for (var key in streams) {
+            var stream = streams[key];
+            if (this.subscribeToStreams) {
+                stream.subscribe();
+            }
+            this.ee.emitEvent('streamCreated', [{ stream: stream }]);
+            // Adding the remote stream to the OpenVidu object
+            this.openVidu.getRemoteStreams().push(stream);
+        }
+    };
+    SessionInternal.prototype.onParticipantJoined = function (msg) {
+        var connection = new Connection_1.Connection(this.openVidu, false, this, msg);
+        connection.creationTime = new Date().getTime();
+        var pid = connection.connectionId;
+        if (!(pid in this.participants)) {
+            console.log("New participant to participants list with id", pid);
+            this.participants[pid] = connection;
+        }
+        else {
+            //use existing so that we don't lose streams info
+            console.info("Participant already exists in participants list with " +
+                "the same id, old:", this.participants[pid], ", joined now:", connection);
+            connection = this.participants[pid];
+        }
+        this.ee.emitEvent('participant-joined', [{
+                connection: connection
+            }]);
+        this.ee.emitEvent('connectionCreated', [{
+                connection: connection
+            }]);
+    };
+    SessionInternal.prototype.onParticipantLeft = function (msg) {
+        var _this = this;
+        var connection = this.participants[msg.name];
+        if (connection !== undefined) {
+            delete this.participants[msg.name];
+            this.ee.emitEvent('participant-left', [{
+                    connection: connection
+                }]);
+            var streams = connection.getStreams();
+            for (var key in streams) {
+                this.ee.emitEvent('streamDestroyed', [{
+                        stream: streams[key],
+                        preventDefault: function () { _this.ee.removeEvent('stream-destroyed-default'); }
+                    }]);
+                this.ee.emitEvent('stream-destroyed-default', [{
+                        stream: streams[key]
+                    }]);
+                // Deleting the removed stream from the OpenVidu object
+                var index = this.openVidu.getRemoteStreams().indexOf(streams[key]);
+                this.openVidu.getRemoteStreams().splice(index, 1);
+            }
+            connection.dispose();
+            this.ee.emitEvent('connectionDestroyed', [{
+                    connection: connection
+                }]);
+        }
+        else {
+            console.warn("Participant " + msg.name
+                + " unknown. Participants: "
+                + JSON.stringify(this.participants));
+        }
+    };
+    ;
+    SessionInternal.prototype.onParticipantEvicted = function (msg) {
+        this.ee.emitEvent('participant-evicted', [{
+                localParticipant: this.localParticipant
+            }]);
+    };
+    ;
+    SessionInternal.prototype.onNewMessage = function (msg) {
+        console.log("New message: " + JSON.stringify(msg));
+        var room = msg.room;
+        var user = msg.user;
+        var message = msg.message;
+        if (user !== undefined) {
+            this.ee.emitEvent('newMessage', [{
+                    room: room,
+                    user: user,
+                    message: message
+                }]);
+        }
+        else {
+            console.warn("User undefined in new message:", msg);
+        }
+    };
+    SessionInternal.prototype.recvIceCandidate = function (msg) {
+        var candidate = {
+            candidate: msg.candidate,
+            sdpMid: msg.sdpMid,
+            sdpMLineIndex: msg.sdpMLineIndex
+        };
+        var connection = this.participants[msg.endpointName];
+        if (!connection) {
+            console.error("Participant not found for endpoint " +
+                msg.endpointName + ". Ice candidate will be ignored.", candidate);
+            return;
+        }
+        var streams = connection.getStreams();
+        var _loop_1 = function (key) {
+            var stream = streams[key];
+            stream.getWebRtcPeer().addIceCandidate(candidate, function (error) {
+                if (error) {
+                    console.error("Error adding candidate for " + key
+                        + " stream of endpoint " + msg.endpointName
+                        + ": " + error);
+                }
+            });
+        };
+        for (var key in streams) {
+            _loop_1(key);
+        }
+    };
+    SessionInternal.prototype.onRoomClosed = function (msg) {
+        console.log("Room closed: " + JSON.stringify(msg));
+        var room = msg.room;
+        if (room !== undefined) {
+            this.ee.emitEvent('room-closed', [{
+                    room: room
+                }]);
+        }
+        else {
+            console.warn("Room undefined in on room closed", msg);
+        }
+    };
+    SessionInternal.prototype.onLostConnection = function () {
+        if (!this.connected) {
+            console.warn('Not connected to room: if you are not debugging, this is probably a certificate error');
+            if (window.confirm('If you are not debugging, this is probably a certificate error at \"' + this.openVidu.getOpenViduServerURL() + '\"\n\nClick OK to navigate and accept it')) {
+                location.assign(this.openVidu.getOpenViduServerURL() + '/accept-certificate');
+            }
+            ;
+            return;
+        }
+        console.log('Lost connection in room ' + this.id);
+        var room = this.id;
+        if (room !== undefined) {
+            this.ee.emitEvent('lost-connection', [{ room: room }]);
+        }
+        else {
+            console.warn('Room undefined when lost connection');
+        }
+    };
+    SessionInternal.prototype.onMediaError = function (params) {
+        console.error("Media error: " + JSON.stringify(params));
+        var error = params.error;
+        if (error) {
+            this.ee.emitEvent('error-media', [{
+                    error: error
+                }]);
+        }
+        else {
+            console.warn("Received undefined media error. Params:", params);
+        }
+    };
+    /*
+     * forced means the user was evicted, no need to send the 'leaveRoom' request
+     */
+    SessionInternal.prototype.leave = function (forced, jsonRpcClient) {
+        forced = !!forced;
+        console.log("Leaving room (forced=" + forced + ")");
+        if (this.connected && !forced) {
+            this.openVidu.sendRequest('leaveRoom', function (error, response) {
+                if (error) {
+                    console.error(error);
+                }
+                jsonRpcClient.close();
+            });
+        }
+        else {
+            jsonRpcClient.close();
+        }
+        this.connected = false;
+        if (this.participants) {
+            for (var pid in this.participants) {
+                this.participants[pid].dispose();
+                delete this.participants[pid];
+            }
+        }
+    };
+    SessionInternal.prototype.disconnect = function (stream) {
+        var connection = stream.getParticipant();
+        if (!connection) {
+            console.error("Stream to disconnect has no participant", stream);
+            return;
+        }
+        delete this.participants[connection.connectionId];
+        connection.dispose();
+        if (connection === this.localParticipant) {
+            console.log("Unpublishing my media (I'm " + connection.connectionId + ")");
+            delete this.localParticipant;
+            this.openVidu.sendRequest('unpublishVideo', function (error, response) {
+                if (error) {
+                    console.error(error);
+                }
+                else {
+                    console.info("Media unpublished correctly");
+                }
+            });
+        }
+        else {
+            this.unsuscribe(stream);
+        }
+    };
+    SessionInternal.prototype.unpublish = function (stream) {
+        var connection = stream.getParticipant();
+        if (!connection) {
+            console.error("Stream to disconnect has no participant", stream);
+            return;
+        }
+        if (connection === this.localParticipant) {
+            delete this.participants[connection.connectionId];
+            connection.dispose();
+            console.log("Unpublishing my media (I'm " + connection.connectionId + ")");
+            delete this.localParticipant;
+            this.openVidu.sendRequest('unpublishVideo', function (error, response) {
+                if (error) {
+                    console.error(error);
+                }
+                else {
+                    console.info("Media unpublished correctly");
+                }
+            });
+        }
+    };
+    SessionInternal.prototype.getStreams = function () {
+        return this.streams;
+    };
+    SessionInternal.prototype.addParticipantSpeaking = function (participantId) {
+        this.participantsSpeaking.push(participantId);
+    };
+    SessionInternal.prototype.removeParticipantSpeaking = function (participantId) {
+        var pos = -1;
+        for (var i = 0; i < this.participantsSpeaking.length; i++) {
+            if (this.participantsSpeaking[i] == participantId) {
+                pos = i;
+                break;
+            }
+        }
+        if (pos != -1) {
+            this.participantsSpeaking.splice(pos, 1);
+        }
+    };
+    return SessionInternal;
+}());
+exports.SessionInternal = SessionInternal;
+
+
+/***/ }),
+
 /***/ 1138:
 /***/ (function(module, exports, __webpack_require__) {
 
@@ -17,7 +943,7 @@ module.exports = __webpack_require__(563);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_rxjs_Observable__ = __webpack_require__(1);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_rxjs_Observable___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2_rxjs_Observable__);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__authentication_service__ = __webpack_require__(47);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_rxjs_Rx__ = __webpack_require__(506);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_rxjs_Rx__ = __webpack_require__(502);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_rxjs_Rx___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_4_rxjs_Rx__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return LessonService; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -197,11 +1123,553 @@ var VideoSessionService = (function () {
 
 /***/ }),
 
+/***/ 325:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+var EventEmitter = __webpack_require__(147);
+var kurentoUtils = __webpack_require__(816);
+var adapter = __webpack_require__(561);
+if (window) {
+    window["adapter"] = adapter;
+}
+function jq(id) {
+    return id.replace(/(@|:|\.|\[|\]|,)/g, "\\$1");
+}
+function show(id) {
+    document.getElementById(jq(id)).style.display = 'block';
+}
+function hide(id) {
+    document.getElementById(jq(id)).style.display = 'none';
+}
+var Stream = (function () {
+    function Stream(openVidu, local, room, options) {
+        var _this = this;
+        this.openVidu = openVidu;
+        this.local = local;
+        this.room = room;
+        this.ee = new EventEmitter();
+        this.videoElements = [];
+        this.elements = [];
+        this.showMyRemote = false;
+        this.localMirrored = false;
+        this.chanId = 0;
+        this.dataChannelOpened = false;
+        this.audioOnly = false;
+        this.isReady = false;
+        this.isVideoELementCreated = false;
+        this.accessIsAllowed = false;
+        this.accessIsDenied = false;
+        if (options.id) {
+            this.id = options.id;
+        }
+        else {
+            this.id = "webcam";
+        }
+        this.connection = options.connection;
+        this.recvVideo = options.recvVideo;
+        this.recvAudio = options.recvAudio;
+        this.dataChannel = options.data || false;
+        this.sendVideo = options.video;
+        this.sendAudio = options.audio;
+        this.mediaConstraints = options.mediaConstraints;
+        this.audioOnly = options.audioOnly || false;
+        this.addEventListener('src-added', function (srcEvent) {
+            _this.videoSrc = srcEvent.src;
+            if (_this.video)
+                _this.video.src = srcEvent.src;
+            console.warn("Videosrc [" + srcEvent.src + "] added to stream [" + _this.getId() + "]");
+        });
+    }
+    Stream.prototype.emitSrcEvent = function (wrstream) {
+        this.ee.emitEvent('src-added', [{
+                src: URL.createObjectURL(wrstream)
+            }]);
+    };
+    Stream.prototype.emitStreamReadyEvent = function () {
+        this.ee.emitEvent('stream-ready'), [{}];
+    };
+    Stream.prototype.getVideoSrc = function () {
+        return this.videoSrc;
+    };
+    Stream.prototype.removeVideo = function (parentElement) {
+        if (typeof parentElement === "string") {
+            document.getElementById(parentElement).removeChild(this.video);
+        }
+        else if (parentElement instanceof Element) {
+            parentElement.removeChild(this.video);
+        }
+        else if (!parentElement) {
+            if (document.getElementById(this.parentId)) {
+                document.getElementById(this.parentId).removeChild(this.video);
+            }
+        }
+    };
+    Stream.prototype.getVideoElement = function () {
+        return this.video;
+    };
+    Stream.prototype.setVideoElement = function (video) {
+        this.video = video;
+    };
+    Stream.prototype.getRecvVideo = function () {
+        return this.recvVideo;
+    };
+    Stream.prototype.getRecvAudio = function () {
+        return this.recvAudio;
+    };
+    Stream.prototype.subscribeToMyRemote = function () {
+        this.showMyRemote = true;
+    };
+    Stream.prototype.displayMyRemote = function () {
+        return this.showMyRemote;
+    };
+    Stream.prototype.mirrorLocalStream = function (wr) {
+        this.showMyRemote = true;
+        this.localMirrored = true;
+        if (wr) {
+            this.wrStream = wr;
+            this.emitSrcEvent(this.wrStream);
+        }
+    };
+    Stream.prototype.isLocalMirrored = function () {
+        return this.localMirrored;
+    };
+    Stream.prototype.getChannelName = function () {
+        return this.getId() + '_' + this.chanId++;
+    };
+    Stream.prototype.isDataChannelEnabled = function () {
+        return this.dataChannel;
+    };
+    Stream.prototype.isDataChannelOpened = function () {
+        return this.dataChannelOpened;
+    };
+    Stream.prototype.onDataChannelOpen = function (event) {
+        console.log('Data channel is opened');
+        this.dataChannelOpened = true;
+    };
+    Stream.prototype.onDataChannelClosed = function (event) {
+        console.log('Data channel is closed');
+        this.dataChannelOpened = false;
+    };
+    Stream.prototype.sendData = function (data) {
+        if (this.wp === undefined) {
+            throw new Error('WebRTC peer has not been created yet');
+        }
+        if (!this.dataChannelOpened) {
+            throw new Error('Data channel is not opened');
+        }
+        console.log("Sending through data channel: " + data);
+        this.wp.send(data);
+    };
+    Stream.prototype.getWrStream = function () {
+        return this.wrStream;
+    };
+    Stream.prototype.getWebRtcPeer = function () {
+        return this.wp;
+    };
+    Stream.prototype.addEventListener = function (eventName, listener) {
+        this.ee.addListener(eventName, listener);
+    };
+    Stream.prototype.addOnceEventListener = function (eventName, listener) {
+        this.ee.addOnceListener(eventName, listener);
+    };
+    Stream.prototype.removeListener = function (eventName) {
+        this.ee.removeAllListeners(eventName);
+    };
+    Stream.prototype.showSpinner = function (spinnerParentId) {
+        var progress = document.createElement('div');
+        progress.id = 'progress-' + this.getId();
+        progress.style.background = "center transparent url('img/spinner.gif') no-repeat";
+        var spinnerParent = document.getElementById(spinnerParentId);
+        if (spinnerParent) {
+            spinnerParent.appendChild(progress);
+        }
+    };
+    Stream.prototype.hideSpinner = function (spinnerId) {
+        spinnerId = (spinnerId === undefined) ? this.getId() : spinnerId;
+        hide('progress-' + spinnerId);
+    };
+    Stream.prototype.playOnlyVideo = function (parentElement, thumbnailId) {
+        // TO-DO: check somehow if the stream is audio only, so the element created is <audio> instead of <video>
+        this.video = document.createElement('video');
+        this.video.id = 'native-video-' + this.getId();
+        this.video.autoplay = true;
+        this.video.controls = false;
+        this.video.src = this.videoSrc;
+        this.videoElements.push({
+            thumb: thumbnailId,
+            video: this.video
+        });
+        if (this.local) {
+            this.video.muted = true;
+        }
+        else {
+            this.video.title = this.getId();
+        }
+        if (typeof parentElement === "string") {
+            this.parentId = parentElement;
+            var parentElementDom = document.getElementById(parentElement);
+            if (parentElementDom) {
+                this.video = parentElementDom.appendChild(this.video);
+                this.ee.emitEvent('video-element-created-by-stream', [{
+                        element: this.video
+                    }]);
+                this.isVideoELementCreated = true;
+            }
+        }
+        else {
+            this.parentId = parentElement.id;
+            this.video = parentElement.appendChild(this.video);
+        }
+        this.ee.emitEvent('stream-created-by-publisher');
+        this.isReady = true;
+        return this.video;
+    };
+    Stream.prototype.playThumbnail = function (thumbnailId) {
+        var container = document.createElement('div');
+        container.className = "participant";
+        container.id = this.getId();
+        var thumbnail = document.getElementById(thumbnailId);
+        if (thumbnail) {
+            thumbnail.appendChild(container);
+        }
+        this.elements.push(container);
+        var name = document.createElement('div');
+        container.appendChild(name);
+        var userName = this.getId().replace('_webcam', '');
+        if (userName.length >= 16) {
+            userName = userName.substring(0, 16) + "...";
+        }
+        name.appendChild(document.createTextNode(userName));
+        name.id = "name-" + this.getId();
+        name.className = "name";
+        name.title = this.getId();
+        this.showSpinner(thumbnailId);
+        return this.playOnlyVideo(container, thumbnailId);
+    };
+    Stream.prototype.getIdInParticipant = function () {
+        return this.id;
+    };
+    Stream.prototype.getParticipant = function () {
+        return this.connection;
+    };
+    Stream.prototype.getId = function () {
+        if (this.connection) {
+            return this.connection.connectionId + "_" + this.id;
+        }
+        else {
+            return this.id + "_webcam";
+        }
+    };
+    Stream.prototype.getRTCPeerConnection = function () {
+        return this.getWebRtcPeer().peerConnection;
+    };
+    Stream.prototype.requestCameraAccess = function (callback) {
+        var _this = this;
+        this.connection.addStream(this);
+        var constraints = this.mediaConstraints;
+        /*let constraints2 = {
+            audio: true,
+            video: {
+                width: {
+                    ideal: 1280
+                },
+                frameRate: {
+                    ideal: 15
+                }
+            }
+        };*/
+        this.userMediaHasVideo(function (hasVideo) {
+            if (!hasVideo) {
+                constraints.video = false;
+                _this.sendVideo = false;
+                _this.audioOnly = true;
+                _this.requestCameraAccesAux(constraints, callback);
+            }
+            else {
+                _this.requestCameraAccesAux(constraints, callback);
+            }
+        });
+    };
+    Stream.prototype.requestCameraAccesAux = function (constraints, callback) {
+        var _this = this;
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(function (userStream) {
+            _this.cameraAccessSuccess(userStream, callback);
+        })
+            .catch(function (error) {
+            //  Try to ask for microphone only
+            navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                .then(function (userStream) {
+                constraints.video = false;
+                _this.sendVideo = false;
+                _this.audioOnly = true;
+                _this.cameraAccessSuccess(userStream, callback);
+            })
+                .catch(function (error) {
+                _this.accessIsDenied = true;
+                _this.accessIsAllowed = false;
+                _this.ee.emitEvent('access-denied-by-publisher');
+                console.error("Access denied", error);
+                callback(error, _this);
+            });
+        });
+    };
+    Stream.prototype.cameraAccessSuccess = function (userStream, callback) {
+        this.accessIsAllowed = true;
+        this.accessIsDenied = false;
+        this.ee.emitEvent('access-allowed-by-publisher');
+        if (userStream.getAudioTracks()[0] != null) {
+            userStream.getAudioTracks()[0].enabled = this.sendAudio;
+        }
+        if (userStream.getVideoTracks()[0] != null) {
+            userStream.getVideoTracks()[0].enabled = this.sendVideo;
+        }
+        this.wrStream = userStream;
+        this.emitSrcEvent(this.wrStream);
+        callback(undefined, this);
+    };
+    Stream.prototype.userMediaHasVideo = function (callback) {
+        navigator.mediaDevices.enumerateDevices().then(function (mediaDevices) {
+            var videoInput = mediaDevices.filter(function (deviceInfo) {
+                return deviceInfo.kind === 'videoinput';
+            })[0];
+            callback(videoInput != null);
+        });
+    };
+    Stream.prototype.publishVideoCallback = function (error, sdpOfferParam, wp) {
+        var _this = this;
+        if (error) {
+            return console.error("(publish) SDP offer error: "
+                + JSON.stringify(error));
+        }
+        console.log("Sending SDP offer to publish as "
+            + this.getId(), sdpOfferParam);
+        this.openVidu.sendRequest("publishVideo", {
+            sdpOffer: sdpOfferParam,
+            doLoopback: this.displayMyRemote() || false,
+            audioOnly: this.audioOnly
+        }, function (error, response) {
+            if (error) {
+                console.error("Error on publishVideo: " + JSON.stringify(error));
+            }
+            else {
+                _this.room.emitEvent('stream-published', [{
+                        stream: _this
+                    }]);
+                _this.processSdpAnswer(response.sdpAnswer);
+            }
+        });
+    };
+    Stream.prototype.startVideoCallback = function (error, sdpOfferParam, wp) {
+        var _this = this;
+        if (error) {
+            return console.error("(subscribe) SDP offer error: "
+                + JSON.stringify(error));
+        }
+        console.log("Sending SDP offer to subscribe to "
+            + this.getId(), sdpOfferParam);
+        this.openVidu.sendRequest("receiveVideoFrom", {
+            sender: this.getId(),
+            sdpOffer: sdpOfferParam
+        }, function (error, response) {
+            if (error) {
+                console.error("Error on recvVideoFrom: " + JSON.stringify(error));
+            }
+            else {
+                _this.processSdpAnswer(response.sdpAnswer);
+            }
+        });
+    };
+    Stream.prototype.initWebRtcPeer = function (sdpOfferCallback) {
+        var _this = this;
+        if (this.local) {
+            var userMediaConstraints = {
+                audio: this.sendAudio,
+                video: this.sendVideo
+            };
+            var options = {
+                videoStream: this.wrStream,
+                mediaConstraints: userMediaConstraints,
+                onicecandidate: this.connection.sendIceCandidate.bind(this.connection),
+            };
+            if (this.dataChannel) {
+                options.dataChannelConfig = {
+                    id: this.getChannelName(),
+                    onopen: this.onDataChannelOpen,
+                    onclose: this.onDataChannelClosed
+                };
+                options.dataChannels = true;
+            }
+            if (this.displayMyRemote()) {
+                this.wp = new kurentoUtils.WebRtcPeer.WebRtcPeerSendrecv(options, function (error) {
+                    if (error) {
+                        return console.error(error);
+                    }
+                    _this.wp.generateOffer(sdpOfferCallback.bind(_this));
+                });
+            }
+            else {
+                this.wp = new kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options, function (error) {
+                    if (error) {
+                        return console.error(error);
+                    }
+                    _this.wp.generateOffer(sdpOfferCallback.bind(_this));
+                });
+            }
+        }
+        else {
+            var offerConstraints = {
+                audio: this.recvAudio,
+                video: !this.audioOnly
+            };
+            console.log("Constraints of generate SDP offer (subscribing)", offerConstraints);
+            var options = {
+                onicecandidate: this.connection.sendIceCandidate.bind(this.connection),
+                mediaConstraints: offerConstraints
+            };
+            this.wp = new kurentoUtils.WebRtcPeer.WebRtcPeerRecvonly(options, function (error) {
+                if (error) {
+                    return console.error(error);
+                }
+                _this.wp.generateOffer(sdpOfferCallback.bind(_this));
+            });
+        }
+        console.log("Waiting for SDP offer to be generated ("
+            + (this.local ? "local" : "remote") + " peer: " + this.getId() + ")");
+    };
+    Stream.prototype.publish = function () {
+        var _this = this;
+        // FIXME: Throw error when stream is not local
+        if (this.isReady) {
+            this.initWebRtcPeer(this.publishVideoCallback);
+        }
+        else {
+            this.ee.once('stream-ready', function (streamEvent) {
+                _this.publish();
+            });
+        }
+        // FIXME: Now we have coupled connecting to a room and adding a
+        // stream to this room. But in the new API, there are two steps.
+        // This is the second step. For now, it do nothing.
+    };
+    Stream.prototype.subscribe = function () {
+        // FIXME: In the current implementation all participants are subscribed
+        // automatically to all other participants. We use this method only to
+        // negotiate SDP
+        this.initWebRtcPeer(this.startVideoCallback);
+    };
+    Stream.prototype.processSdpAnswer = function (sdpAnswer) {
+        var _this = this;
+        var answer = new RTCSessionDescription({
+            type: 'answer',
+            sdp: sdpAnswer,
+        });
+        console.log(this.getId() + ": set peer connection with recvd SDP answer", sdpAnswer);
+        var participantId = this.getId();
+        var pc = this.wp.peerConnection;
+        pc.setRemoteDescription(answer, function () {
+            // Avoids to subscribe to your own stream remotely 
+            // except when showMyRemote is true
+            if (!_this.local || _this.displayMyRemote()) {
+                _this.wrStream = pc.getRemoteStreams()[0];
+                console.log("Peer remote stream", _this.wrStream);
+                if (_this.wrStream != undefined) {
+                    _this.emitSrcEvent(_this.wrStream);
+                    _this.speechEvent = kurentoUtils.WebRtcPeer.hark(_this.wrStream, { threshold: _this.room.thresholdSpeaker });
+                    _this.speechEvent.on('speaking', function () {
+                        _this.room.addParticipantSpeaking(participantId);
+                        _this.room.emitEvent('stream-speaking', [{
+                                participantId: participantId
+                            }]);
+                    });
+                    _this.speechEvent.on('stopped_speaking', function () {
+                        _this.room.removeParticipantSpeaking(participantId);
+                        _this.room.emitEvent('stream-stopped-speaking', [{
+                                participantId: participantId
+                            }]);
+                    });
+                }
+                for (var _i = 0, _a = _this.videoElements; _i < _a.length; _i++) {
+                    var videoElement = _a[_i];
+                    var thumbnailId = videoElement.thumb;
+                    var video = videoElement.video;
+                    video.src = URL.createObjectURL(_this.wrStream);
+                    video.onplay = function () {
+                        console.log(_this.getId() + ': ' + 'Video playing');
+                        //show(thumbnailId);
+                        //this.hideSpinner(this.getId());
+                    };
+                }
+                _this.room.emitEvent('stream-subscribed', [{
+                        stream: _this
+                    }]);
+            }
+        }, function (error) {
+            console.error(_this.getId() + ": Error setting SDP to the peer connection: "
+                + JSON.stringify(error));
+        });
+    };
+    Stream.prototype.unpublish = function () {
+        if (this.wp) {
+            this.wp.dispose();
+        }
+        else {
+            if (this.wrStream) {
+                this.wrStream.getAudioTracks().forEach(function (track) {
+                    track.stop && track.stop();
+                });
+                this.wrStream.getVideoTracks().forEach(function (track) {
+                    track.stop && track.stop();
+                });
+            }
+        }
+        if (this.speechEvent) {
+            this.speechEvent.stop();
+        }
+        console.log(this.getId() + ": Stream '" + this.id + "' unpublished");
+    };
+    Stream.prototype.dispose = function () {
+        function disposeElement(element) {
+            if (element && element.parentNode) {
+                element.parentNode.removeChild(element);
+            }
+        }
+        this.elements.forEach(function (e) { return disposeElement(e); });
+        //this.videoElements.forEach(ve => disposeElement(ve.video));
+        disposeElement("progress-" + this.getId());
+        if (this.wp) {
+            this.wp.dispose();
+        }
+        else {
+            if (this.wrStream) {
+                this.wrStream.getAudioTracks().forEach(function (track) {
+                    track.stop && track.stop();
+                });
+                this.wrStream.getVideoTracks().forEach(function (track) {
+                    track.stop && track.stop();
+                });
+            }
+        }
+        if (this.speechEvent) {
+            this.speechEvent.stop();
+        }
+        console.log(this.getId() + ": Stream '" + this.id + "' disposed");
+    };
+    return Stream;
+}());
+exports.Stream = Stream;
+
+
+/***/ }),
+
 /***/ 47:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_rxjs_Rx__ = __webpack_require__(506);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_rxjs_Rx__ = __webpack_require__(502);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_rxjs_Rx___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_0_rxjs_Rx__);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_core__ = __webpack_require__(0);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__angular_http__ = __webpack_require__(80);
@@ -485,7 +1953,7 @@ var DashboardComponent = (function () {
     DashboardComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-dashboard',
-            template: __webpack_require__(826),
+            template: __webpack_require__(822),
             styles: [__webpack_require__(796)],
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_4__services_lesson_service__["a" /* LessonService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_4__services_lesson_service__["a" /* LessonService */]) === 'function' && _a) || Object, (typeof (_b = typeof __WEBPACK_IMPORTED_MODULE_5__services_video_session_service__["a" /* VideoSessionService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_5__services_video_session_service__["a" /* VideoSessionService */]) === 'function' && _b) || Object, (typeof (_c = typeof __WEBPACK_IMPORTED_MODULE_6__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_6__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _c) || Object, (typeof (_d = typeof __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */]) === 'function' && _d) || Object, (typeof (_e = typeof __WEBPACK_IMPORTED_MODULE_2__angular_material__["b" /* MdSnackBar */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_2__angular_material__["b" /* MdSnackBar */]) === 'function' && _e) || Object, (typeof (_f = typeof __WEBPACK_IMPORTED_MODULE_2__angular_material__["c" /* MdDialog */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_2__angular_material__["c" /* MdDialog */]) === 'function' && _f) || Object])
@@ -758,7 +2226,7 @@ var LessonDetailsComponent = (function () {
     LessonDetailsComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-lesson-details',
-            template: __webpack_require__(828),
+            template: __webpack_require__(824),
             styles: [__webpack_require__(798)],
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_6__services_lesson_service__["a" /* LessonService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_6__services_lesson_service__["a" /* LessonService */]) === 'function' && _a) || Object, (typeof (_b = typeof __WEBPACK_IMPORTED_MODULE_7__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_7__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _b) || Object, (typeof (_c = typeof __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */]) === 'function' && _c) || Object, (typeof (_d = typeof __WEBPACK_IMPORTED_MODULE_1__angular_router__["c" /* ActivatedRoute */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_router__["c" /* ActivatedRoute */]) === 'function' && _d) || Object, (typeof (_e = typeof __WEBPACK_IMPORTED_MODULE_2__angular_common__["a" /* Location */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_2__angular_common__["a" /* Location */]) === 'function' && _e) || Object, (typeof (_f = typeof __WEBPACK_IMPORTED_MODULE_3__angular_material__["b" /* MdSnackBar */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_3__angular_material__["b" /* MdSnackBar */]) === 'function' && _f) || Object])
@@ -883,7 +2351,7 @@ var PresentationComponent = (function () {
     PresentationComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-presentation',
-            template: __webpack_require__(829),
+            template: __webpack_require__(825),
             styles: [__webpack_require__(799)]
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _a) || Object, (typeof (_b = typeof __WEBPACK_IMPORTED_MODULE_3__services_user_service__["a" /* UserService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_3__services_user_service__["a" /* UserService */]) === 'function' && _b) || Object, (typeof (_c = typeof __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */]) === 'function' && _c) || Object])
@@ -923,7 +2391,7 @@ var ProfileComponent = (function () {
     ProfileComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-profile',
-            template: __webpack_require__(830),
+            template: __webpack_require__(826),
             styles: [__webpack_require__(800)]
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_1__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _a) || Object])
@@ -941,7 +2409,7 @@ var ProfileComponent = (function () {
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_common__ = __webpack_require__(14);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_openvidu_browser__ = __webpack_require__(821);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_openvidu_browser__ = __webpack_require__(1120);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_openvidu_browser___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2_openvidu_browser__);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__services_video_session_service__ = __webpack_require__(292);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__services_authentication_service__ = __webpack_require__(47);
@@ -1158,7 +2626,7 @@ var VideoSessionComponent = (function () {
     VideoSessionComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-video-session',
-            template: __webpack_require__(831),
+            template: __webpack_require__(827),
             styles: [__webpack_require__(801)]
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_1__angular_common__["a" /* Location */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_common__["a" /* Location */]) === 'function' && _a) || Object, (typeof (_b = typeof __WEBPACK_IMPORTED_MODULE_4__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_4__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _b) || Object, (typeof (_c = typeof __WEBPACK_IMPORTED_MODULE_3__services_video_session_service__["a" /* VideoSessionService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_3__services_video_session_service__["a" /* VideoSessionService */]) === 'function' && _c) || Object])
@@ -1238,6 +2706,372 @@ var UserService = (function () {
 
 /***/ }),
 
+/***/ 554:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+var EventEmitter = __webpack_require__(147);
+var Publisher = (function () {
+    function Publisher(stream, parentId) {
+        var _this = this;
+        this.ee = new EventEmitter();
+        this.accessAllowed = false;
+        this.stream = stream;
+        this.stream.addEventListener('camera-access-changed', function (event) {
+            _this.accessAllowed = event.accessAllowed;
+            if (_this.accessAllowed) {
+                _this.ee.emitEvent('accessAllowed');
+            }
+            else {
+                _this.ee.emitEvent('accessDenied');
+            }
+        });
+        if (document.getElementById(parentId) != null) {
+            this.element = document.getElementById(parentId);
+        }
+    }
+    Publisher.prototype.publishAudio = function (value) {
+        this.stream.getWebRtcPeer().audioEnabled = value;
+    };
+    Publisher.prototype.publishVideo = function (value) {
+        this.stream.getWebRtcPeer().videoEnabled = value;
+    };
+    Publisher.prototype.destroy = function () {
+        this.session.unpublish(this);
+        this.stream.dispose();
+        this.stream.removeVideo(this.element);
+        return this;
+    };
+    Publisher.prototype.on = function (eventName, callback) {
+        var _this = this;
+        this.ee.addListener(eventName, function (event) {
+            callback(event);
+        });
+        if (eventName == 'videoElementCreated') {
+            if (this.stream.isVideoELementCreated) {
+                this.ee.emitEvent('videoElementCreated', [{
+                        element: this.stream.getVideoElement()
+                    }]);
+            }
+            else {
+                this.stream.addEventListener('video-element-created-by-stream', function (element) {
+                    console.warn('Publisher emitting videoElementCreated');
+                    _this.id = element.id;
+                    _this.ee.emitEvent('videoElementCreated', [{
+                            element: element.element
+                        }]);
+                });
+            }
+        }
+        if (eventName == 'streamCreated') {
+            if (this.stream.isReady) {
+                this.ee.emitEvent('streamCreated', [{ stream: this.stream }]);
+            }
+            else {
+                this.stream.addEventListener('stream-created-by-publisher', function () {
+                    console.warn('Publisher emitting streamCreated');
+                    _this.ee.emitEvent('streamCreated', [{ stream: _this.stream }]);
+                });
+            }
+        }
+        if (eventName == 'accessAllowed') {
+            if (this.stream.accessIsAllowed) {
+                this.ee.emitEvent('accessAllowed');
+            }
+            else {
+                this.stream.addEventListener('access-allowed-by-publisher', function () {
+                    _this.ee.emitEvent('accessAllowed');
+                });
+            }
+        }
+        if (eventName == 'accessDenied') {
+            if (this.stream.accessIsDenied) {
+                this.ee.emitEvent('accessDenied');
+            }
+            else {
+                this.stream.addEventListener('access-denied-by-publisher', function () {
+                    _this.ee.emitEvent('accessDenied');
+                });
+            }
+        }
+    };
+    return Publisher;
+}());
+exports.Publisher = Publisher;
+
+
+/***/ }),
+
+/***/ 555:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+var Subscriber_1 = __webpack_require__(556);
+var EventEmitter = __webpack_require__(147);
+var Session = (function () {
+    function Session(session, openVidu) {
+        var _this = this;
+        this.session = session;
+        this.openVidu = openVidu;
+        this.ee = new EventEmitter();
+        this.sessionId = session.getSessionId();
+        // Listens to the deactivation of the default behaviour upon the deletion of a Stream object
+        this.session.addEventListener('stream-destroyed-default', function (event) {
+            event.stream.removeVideo();
+        });
+        // Listens to the deactivation of the default behaviour upon the disconnection of a Session
+        this.session.addEventListener('session-disconnected-default', function () {
+            var s;
+            for (var _i = 0, _a = _this.openVidu.openVidu.getRemoteStreams(); _i < _a.length; _i++) {
+                s = _a[_i];
+                s.removeVideo();
+            }
+            if (_this.connection) {
+                for (var streamId in _this.connection.getStreams()) {
+                    _this.connection.getStreams()[streamId].removeVideo();
+                }
+            }
+        });
+        // Sets or updates the value of 'connection' property. Triggered by SessionInternal when succesful connection
+        this.session.addEventListener('update-connection-object', function (event) {
+            _this.connection = event.connection;
+        });
+    }
+    Session.prototype.connect = function (param1, param2, param3) {
+        // Early configuration to deactivate automatic subscription to streams
+        if (typeof param2 == "string") {
+            this.session.configure({
+                sessionId: this.session.getSessionId(),
+                participantId: param1,
+                metadata: param2,
+                subscribeToStreams: false
+            });
+            this.session.connect(param1, param3);
+        }
+        else {
+            this.session.configure({
+                sessionId: this.session.getSessionId(),
+                participantId: param1,
+                metadata: '',
+                subscribeToStreams: false
+            });
+            this.session.connect(param1, param2);
+        }
+    };
+    Session.prototype.disconnect = function () {
+        var _this = this;
+        this.openVidu.openVidu.close(false);
+        this.session.emitEvent('sessionDisconnected', [{
+                preventDefault: function () { _this.session.removeEvent('session-disconnected-default'); }
+            }]);
+        this.session.emitEvent('session-disconnected-default', [{}]);
+    };
+    Session.prototype.publish = function (publisher) {
+        publisher.session = this;
+        publisher.stream.publish();
+    };
+    Session.prototype.unpublish = function (publisher) {
+        this.session.unpublish(publisher.stream);
+    };
+    Session.prototype.on = function (eventName, callback) {
+        this.session.addEventListener(eventName, function (event) {
+            callback(event);
+        });
+    };
+    Session.prototype.once = function (eventName, callback) {
+        this.session.addOnceEventListener(eventName, function (event) {
+            callback(event);
+        });
+    };
+    Session.prototype.off = function (eventName, eventHandler) {
+        this.session.removeListener(eventName, eventHandler);
+    };
+    Session.prototype.subscribe = function (param1, param2, param3) {
+        // Subscription
+        this.session.subscribe(param1);
+        var subscriber = new Subscriber_1.Subscriber(param1, param2);
+        param1.playOnlyVideo(param2, null);
+        return subscriber;
+    };
+    Session.prototype.unsubscribe = function (subscriber) {
+        this.session.unsuscribe(subscriber.stream);
+        subscriber.stream.removeVideo();
+    };
+    /* Shortcut event API */
+    Session.prototype.onStreamCreated = function (callback) {
+        this.session.addEventListener("streamCreated", function (streamEvent) {
+            callback(streamEvent.stream);
+        });
+    };
+    Session.prototype.onStreamDestroyed = function (callback) {
+        this.session.addEventListener("streamDestroyed", function (streamEvent) {
+            callback(streamEvent.stream);
+        });
+    };
+    Session.prototype.onParticipantJoined = function (callback) {
+        this.session.addEventListener("participant-joined", function (participantEvent) {
+            callback(participantEvent.connection);
+        });
+    };
+    Session.prototype.onParticipantLeft = function (callback) {
+        this.session.addEventListener("participant-left", function (participantEvent) {
+            callback(participantEvent.connection);
+        });
+    };
+    Session.prototype.onParticipantPublished = function (callback) {
+        this.session.addEventListener("participant-published", function (participantEvent) {
+            callback(participantEvent.connection);
+        });
+    };
+    Session.prototype.onParticipantEvicted = function (callback) {
+        this.session.addEventListener("participant-evicted", function (participantEvent) {
+            callback(participantEvent.connection);
+        });
+    };
+    Session.prototype.onRoomClosed = function (callback) {
+        this.session.addEventListener("room-closed", function (roomEvent) {
+            callback(roomEvent.room);
+        });
+    };
+    Session.prototype.onLostConnection = function (callback) {
+        this.session.addEventListener("lost-connection", function (roomEvent) {
+            callback(roomEvent.room);
+        });
+    };
+    Session.prototype.onMediaError = function (callback) {
+        this.session.addEventListener("error-media", function (errorEvent) {
+            callback(errorEvent.error);
+        });
+    };
+    return Session;
+}());
+exports.Session = Session;
+
+
+/***/ }),
+
+/***/ 556:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+var EventEmitter = __webpack_require__(147);
+var Subscriber = (function () {
+    function Subscriber(stream, parentId) {
+        this.ee = new EventEmitter();
+        this.stream = stream;
+        if (document.getElementById(parentId) != null) {
+            this.element = document.getElementById(parentId);
+        }
+    }
+    Subscriber.prototype.on = function (eventName, callback) {
+        var _this = this;
+        this.ee.addListener(eventName, function (event) {
+            callback(event);
+        });
+        if (eventName == 'videoElementCreated') {
+            if (this.stream.isReady) {
+                this.ee.emitEvent('videoElementCreated', [{
+                        element: this.stream.getVideoElement()
+                    }]);
+            }
+            else {
+                this.stream.addEventListener('video-element-created-by-stream', function (element) {
+                    console.warn("Subscriber emitting videoElementCreated");
+                    _this.id = element.id;
+                    _this.ee.emitEvent('videoElementCreated', [{
+                            element: element
+                        }]);
+                });
+            }
+        }
+    };
+    return Subscriber;
+}());
+exports.Subscriber = Subscriber;
+
+
+/***/ }),
+
+/***/ 557:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+var Stream_1 = __webpack_require__(325);
+var Connection = (function () {
+    function Connection(openVidu, local, room, options) {
+        this.openVidu = openVidu;
+        this.local = local;
+        this.room = room;
+        this.options = options;
+        this.streams = {};
+        this.streamsOpts = [];
+        if (options) {
+            this.connectionId = options.id;
+            this.data = options.metadata;
+            if (options.streams) {
+                for (var _i = 0, _a = options.streams; _i < _a.length; _i++) {
+                    var streamOptions = _a[_i];
+                    var streamOpts = {
+                        id: streamOptions.id,
+                        connection: this,
+                        recvVideo: (streamOptions.recvVideo == undefined ? true : streamOptions.recvVideo),
+                        recvAudio: (streamOptions.recvAudio == undefined ? true : streamOptions.recvAudio),
+                        audio: streamOptions.audio,
+                        video: streamOptions.video,
+                        data: streamOptions.data,
+                        mediaConstraints: streamOptions.mediaConstraints,
+                        audioOnly: streamOptions.audioOnly
+                    };
+                    var stream = new Stream_1.Stream(openVidu, false, room, streamOpts);
+                    this.addStream(stream);
+                    this.streamsOpts.push(streamOpts);
+                }
+            }
+        }
+        console.log("New " + (local ? "local " : "remote ") + "participant " + this.connectionId
+            + ", streams opts: ", this.streamsOpts);
+    }
+    Connection.prototype.addStream = function (stream) {
+        this.streams[stream.getIdInParticipant()] = stream;
+        this.room.getStreams()[stream.getIdInParticipant()] = stream;
+    };
+    Connection.prototype.getStreams = function () {
+        return this.streams;
+    };
+    Connection.prototype.dispose = function () {
+        for (var key in this.streams) {
+            this.streams[key].dispose();
+        }
+    };
+    Connection.prototype.sendIceCandidate = function (candidate) {
+        console.debug((this.local ? "Local" : "Remote"), "candidate for", this.connectionId, JSON.stringify(candidate));
+        this.openVidu.sendRequest("onIceCandidate", {
+            endpointName: this.connectionId,
+            candidate: candidate.candidate,
+            sdpMid: candidate.sdpMid,
+            sdpMLineIndex: candidate.sdpMLineIndex
+        }, function (error, response) {
+            if (error) {
+                console.error("Error sending ICE candidate: "
+                    + JSON.stringify(error));
+            }
+        });
+    };
+    return Connection;
+}());
+exports.Connection = Connection;
+
+
+/***/ }),
+
 /***/ 562:
 /***/ (function(module, exports) {
 
@@ -1304,7 +3138,7 @@ var AppComponent = (function () {
     AppComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-root',
-            template: __webpack_require__(825),
+            template: __webpack_require__(821),
             styles: [__webpack_require__(795)]
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */]) === 'function' && _a) || Object, (typeof (_b = typeof __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _b) || Object])
@@ -1517,7 +3351,7 @@ var ErrorMessageComponent = (function () {
     ErrorMessageComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-error-message',
-            template: __webpack_require__(827),
+            template: __webpack_require__(823),
             styles: [__webpack_require__(797)]
         }), 
         __metadata('design:paramtypes', [])
@@ -1690,49 +3524,49 @@ module.exports = module.exports.toString();
 
 /***/ }),
 
-/***/ 825:
+/***/ 821:
 /***/ (function(module, exports) {
 
 module.exports = "<md-sidenav-container>\n\n  <md-sidenav #sidenav>\n    <button md-button (click)=\"router.navigate(['/lessons']); sidenav.close()\" class=\"sidenav-button\">Lessons</button>\n    <button md-button (click)=\"router.navigate(['/profile']); sidenav.close()\" class=\"sidenav-button\">Profile</button>\n    <button md-button (click)=\"sidenav.close(); authenticationService.directLogOut()\" class=\"sidenav-button\">Logout</button>\n  </md-sidenav>\n\n  <header *ngIf=\"!isVideoSessionUrl()\">\n    <md-toolbar color=\"primary\" class=\"mat-elevation-z6\">\n      <button md-button routerLink=\"/\" id=\"navbar-logo\">\n        OpenVidu Classroom Demo\n      </button>\n      <span class=\"fill-remaining-space\"></span>\n      <div *ngIf=\"authenticationService.isLoggedIn()\" fxLayout=\"row\" fxShow=\"false\" fxShow.gt-sm>\n        <button md-button routerLink=\"/lessons\">Lessons</button>\n        <button md-button routerLink=\"/profile\">Profile</button>\n        <button md-button (click)=\"authenticationService.directLogOut()\">LOGOUT</button>\n      </div>\n      <button *ngIf=\"authenticationService.isLoggedIn()\" md-button fxHide=\"false\" fxHide.gt-sm (click)=\"sidenav.open()\">\n        <md-icon>menu</md-icon>\n      </button>\n    </md-toolbar>\n  </header>\n\n  <main>\n    <router-outlet></router-outlet>\n  </main>\n\n  <footer *ngIf=\"!isVideoSessionUrl()\" class=\"page-footer back-primary color-secondary mat-elevation-z5\">\n    <div class=\"container\">\n      <div fxLayout=\"row\" fxLayout.xs=\"column\" fxLayoutAlign=\"start start\" fxLayoutAlign.xs=\"start\">\n        <div fxFlex=\"50%\" fxFlex.xs=\"100%\">\n          <h2>This is a sample application</h2>\n          <p class=\"grey-text text-lighten-4\">Implementing a secure real time app with OpenVidu</p>\n        </div>\n        <div fxFlex=\"50%\" fxFlex.xs=\"100%\">\n          <div fxLayout=\"row\" fxLayoutAlign=\"end start\" fxLayoutAlign.xs=\"start\">\n            <div fxFlex=\"50%\">\n              <h2>Technologies</h2>\n              <ul>\n                <li><a class=\"hover-link\" href=\"https://angular.io/\" target=\"_blank\">Angular</a></li>\n                <li><a class=\"hover-link\" href=\"https://material.angular.io/\" target=\"_blank\">Angular Material</a></li>\n                <li><a class=\"hover-link\" href=\"https://spring.io/\" target=\"_blank\">Spring Framework</a></li>\n                <li><a class=\"hover-link\" href=\"https://www.kurento.org/\" target=\"_blank\">Kurento</a></li>\n              </ul>\n            </div>\n            <div fxFlex=\"50%\">\n              <h2>Connect</h2>\n              <ul>\n                <li><a class=\"hover-link\" href=\"https://github.com/OpenVidu\" target=\"_blank\">GitHub repository</a></li>\n              </ul>\n            </div>\n          </div>\n        </div>\n      </div>\n    </div>\n  </footer>\n\n</md-sidenav-container>\n"
 
 /***/ }),
 
-/***/ 826:
+/***/ 822:
 /***/ (function(module, exports) {
 
 module.exports = "<div *ngIf=\"!this.lessons\" class=\"cssload-container\">\n  <div class=\"cssload-tube-tunnel\"></div>\n</div>\n\n<div *ngIf=\"this.lessons\" fxLayout=\"row\" fxLayoutAlign=\"center center\">\n  <div class=\"div-inner-main\" [style.xs]=\"{'width': '100%'}\">\n\n    <div *ngIf=\"!addingLesson\" fxLayout=\"row\" fxLayoutAlign=\"center center\">\n      <div fxFlex=\"80%\">MY LESSONS</div>\n      <md-icon fxFlex=\"20%\" fxLayoutAlign=\"end center\" *ngIf=\"authenticationService.isTeacher()\" (click)=\"addingLesson = true\"\n        [title]=\"'Add lesson'\">add_circle_outline</md-icon>\n    </div>\n\n    <div *ngIf=\"addingLesson\">\n      <div>NEW LESSON</div>\n      <form #newLessonForm (ngSubmit)=\"newLesson(); newLessonForm.reset()\" [class.filtered]=\"sumbitNewLesson\">\n        <md-input-container>\n          <input mdInput placeholder=\"Title\" [(ngModel)]=\"lessonTitle\" name=\"lessonTitle\" id=\"lessonTitle\" type=\"text\" autocomplete=\"off\"\n            required>\n        </md-input-container>\n        <div class=\"block-btn\">\n          <button md-button type=\"submit\" [disabled]=\"sumbitNewLesson\">Send</button>\n          <button md-button (click)=\"addingLesson = false; newLessonForm.reset()\" [disabled]=\"sumbitNewLesson\">Cancel</button>\n        </div>\n      </form>\n    </div>\n\n    <md-card *ngFor=\"let lesson of lessons\">\n      <div fxLayout=\"row\" fxLayoutAlign=\"center center\" fxLayoutGap=\"10px\">\n        <span fxFlex=\"70%\" class=\"title\">{{lesson.title}}</span>\n        <span fxFlex=\"70%\" *ngIf=\"this.authenticationService.isStudent()\" class=\"teacher\">{{lesson.teacher.nickName}}</span>\n        <md-icon fxFlex=\"15%\" *ngIf=\"this.authenticationService.isTeacher()\" (click)=\"goToLessonDetails(lesson)\" [title]=\"'Modify lesson'\">mode_edit</md-icon>\n        <md-icon fxFlex=\"15%\" (click)=\"goToLesson(lesson)\" [title]=\"'Go to lesson!'\">play_circle_filled</md-icon>\n      </div>\n    </md-card>\n\n    <div *ngIf=\"lessons.length === 0 && authenticationService.isStudent() && !addingLesson\">\n      <app-error-message [errorTitle]=\"'You do not have any lessons'\" [errorContent]=\"'Your teacher must invite you'\" [customClass]=\"'warning'\"\n        [closable]=\"false\"></app-error-message>\n    </div>\n\n    <div *ngIf=\"lessons.length === 0 && authenticationService.isTeacher() && !addingLesson\">\n      <app-error-message [errorTitle]=\"'You do not have any lessons'\" [errorContent]=\"'You can add one by clicking on the icon above'\"\n        [customClass]=\"'warning'\" [closable]=\"false\"></app-error-message>\n    </div>\n\n  </div>\n</div>\n"
 
 /***/ }),
 
-/***/ 827:
+/***/ 823:
 /***/ (function(module, exports) {
 
 module.exports = "<md-card [ngClass]=\"customClass\">\n  <md-icon *ngIf=\"closable\" (click)=\"closeAlert()\">clear</md-icon>\n  <md-card-title>{{this.errorTitle}}</md-card-title>\n  <md-card-subtitle [innerHTML]=\"this.errorContent\"></md-card-subtitle>\n</md-card>\n"
 
 /***/ }),
 
-/***/ 828:
+/***/ 824:
 /***/ (function(module, exports) {
 
 module.exports = "<div *ngIf=\"lesson\" fxLayout=\"row\" fxLayoutAlign=\"center center\">\n  <div class=\"div-inner-main\" [style.xs]=\"{'width': '100%'}\">\n\n    <div *ngIf=\"!editingTitle\" fxLayout=\"row\" fxLayoutAlign=\"center center\">\n      <md-icon fxFlex=\"15%\" fxLayoutAlign=\"start center\" (click)=\"router.navigate(['/lessons'])\" [title]=\"'Back to lessons'\">keyboard_arrow_left</md-icon>\n      <h2 fxFlex=\"70%\">{{lesson.title}}</h2>\n      <md-icon fxFlex=\"15%\" fxLayoutAlign=\"end center\" (click)=\"editingTitle = true; titleEdited = lesson.title\" [title]=\"'Edit lesson'\">mode_edit</md-icon>\n    </div>\n\n    <div *ngIf=\"editingTitle\" fxLayout=\"row\" fxLayoutAlign=\"start center\">\n      <form #editLessonForm (ngSubmit)=\"editLesson(); editLessonForm.reset()\" [class.filtered]=\"sumbitEditLesson\">\n        <md-input-container>\n          <input mdInput placeholder=\"Title\" [(ngModel)]=\"titleEdited\" name=\"lessonTitle\" type=\"text\" autocomplete=\"off\" required>\n        </md-input-container>\n        <div class=\"block-btn\">\n          <button md-button type=\"submit\" [disabled]=\"sumbitEditLesson\">Send</button>\n          <a md-button (click)=\"editingTitle = false; titleEdited = ''\" [disabled]=\"sumbitEditLesson\">Cancel</a>\n          <a md-button (click)=\"deleteLesson()\" [disabled]=\"sumbitEditLesson\">Delete lesson</a>\n        </div>\n      </form>\n    </div>\n\n    <form #addAttendersForm (ngSubmit)=\"addLessonAttenders(); addAttendersForm.reset()\" [class.filtered]=\"sumbitAddAttenders\">\n      <h4 id=\"new-attender-title\">New attender</h4>\n      <md-input-container>\n        <input mdInput placeholder=\"Email\" [(ngModel)]=\"emailAttender\" name=\"attenderEmail\" type=\"text\" autocomplete=\"off\" required>\n      </md-input-container>\n      <div class=\"block-btn\">\n        <button md-button type=\"submit\" [disabled]=\"sumbitAddAttenders\">Send</button>\n        <a md-button (click)=\"addAttendersForm.reset()\" [disabled]=\"sumbitAddAttenders || emailAttender == null\">Cancel</a>\n      </div>\n    </form>\n\n    <app-error-message *ngIf=\"addAttendersCorrect\" (eventShowable)=\"addAttendersCorrect = false\" [errorTitle]=\"attCorrectTitle\"\n      [errorContent]=\"attCorrectContent\" [customClass]=\"'correct'\" [closable]=\"true\"></app-error-message>\n    <app-error-message *ngIf=\"addAttendersError\" (eventShowable)=\"addAttendersError = false\" [errorTitle]=\"attErrorTitle\" [errorContent]=\"attErrorContent\"\n      [customClass]=\"'fail'\" [closable]=\"true\"></app-error-message>\n\n    <div fxLayout=\"row\" fxLayout.xs=\"column\" fxLayoutGap=\"20px\" fxLayoutAlign=\"space-between center\" fxLayoutAlign.xs=\"start\"\n      class=\"attender-row\">\n      <div fxFlex=\"90%\" class=\"no-margin-bottom\">\n        <div fxLayout=\"row\" fxLayout.xs=\"column\" fxLayoutAlign=\"space-between center\" fxLayoutAlign.xs=\"start\" fxLayoutGap=\"20px\">\n          <div class=\"no-margin-bottom\" fxFlex>{{authenticationService.getCurrentUser().nickName}}</div>\n          <div class=\"attender-email\" fxFlex>{{authenticationService.getCurrentUser().name}}</div>\n        </div>\n      </div>\n      <div fxFlex=\"10%\"></div>\n    </div>\n    <div *ngFor=\"let attender of lesson.attenders; let i = index\">\n      <div *ngIf=\"attender.id != authenticationService.getCurrentUser().id\" fxLayout=\"row\" fxLayoutAlign.xs=\"start\" fxLayoutGap=\"20px\"\n        class=\"attender-row\">\n        <div fxFlex=\"90%\">\n          <div fxLayout=\"row\" fxLayout.xs=\"column\" fxLayoutAlign=\"space-between center\" fxLayoutAlign.xs=\"start\" fxLayoutGap=\"20px\">\n            <div class=\"no-margin-bottom\" fxFlex>{{attender.nickName}}</div>\n            <div class=\"attender-email\" fxFlex>{{attender.name}}</div>\n          </div>\n        </div>\n        <div fxFlex=\"10%\">\n          <md-icon *ngIf=\"!this.arrayOfAttDels[i]\" (click)=\"deleteLessonAttender(i, attender)\" [title]=\"'Remove attender'\">clear</md-icon>\n          <md-icon *ngIf=\"this.arrayOfAttDels[i]\" class=\"rotating\">cached</md-icon>\n        </div>\n      </div>\n    </div>\n    \n  </div>\n</div>\n"
 
 /***/ }),
 
-/***/ 829:
+/***/ 825:
 /***/ (function(module, exports) {
 
 module.exports = "<div fxLayout=\"row\" fxLayoutAlign=\"center center\">\n  <div class=\"div-inner-main\" [style.xs]=\"{'width': '100%'}\">\n\n    <h1>OpenVidu Classroom Demo</h1>\n\n    <div fxLayout=\"column\" fxLayoutAlign=\"space-around center\">\n\n      <md-card>\n        <md-card-content>\n\n          <div *ngIf=\"submitProcessing\" class=\"cssload-container\">\n            <div class=\"cssload-tube-tunnel\"></div>\n          </div>\n\n          <form #myForm (ngSubmit)=\"onSubmit()\" [class.filtered]=\"submitProcessing\">\n\n            <div>\n              <md-input-container>\n                <input mdInput placeholder=\"Email\" [(ngModel)]=\"email\" name=\"email\" id=\"email\" type=\"email\" required>\n              </md-input-container>\n            </div>\n\n            <div *ngIf=\"!loginView\">\n              <md-input-container>\n                <input mdInput placeholder=\"Name\" [(ngModel)]=\"nickName\" name=\"nickName\" id=\"nickName\" type=\"text\" autocomplete=\"off\" required>\n              </md-input-container>\n            </div>\n\n            <div>\n              <md-input-container>\n                <input mdInput placeholder=\"Password\" [(ngModel)]=\"password\" name=\"password\" id=\"password\" type=\"password\" required>\n              </md-input-container>\n            </div>\n\n            <div *ngIf=\"!loginView\">\n              <md-input-container>\n                <input mdInput placeholder=\"Confirm password\" [(ngModel)]=\"confirmPassword\" name=\"confirmPassword\" id=\"confirmPassword\" type=\"password\"\n                  autocomplete=\"off\" required>\n              </md-input-container>\n            </div>\n\n            <div *ngIf=\"!loginView\" class=\"radio-button-div\">\n              <span id=\"sign-up-as\">Sign up as...</span>\n              <md-radio-group [(ngModel)]=\"roleUserSignup\" name=\"roleUserSignup\" id=\"roleUserSignup\">\n                <md-radio-button value='student'>Student</md-radio-button>\n                <md-radio-button value='teacher'>Teacher</md-radio-button>\n              </md-radio-group>\n            </div>\n\n            <app-error-message *ngIf=\"fieldsIncorrect\" (eventShowable)=\"fieldsIncorrect = false\" [errorTitle]=\"errorTitle\" [errorContent]=\"errorContent\"\n              [customClass]=\"customClass\" [closable]=\"true\"></app-error-message>\n\n            <div class=\"btn-container\">\n              <button md-raised-button color=\"accent\" type=\"submit\" *ngIf=\"loginView\" id=\"log-in-btn\">Log in</button>\n              <button md-icon-button *ngIf=\"loginView\" type=\"button\" (click)=\"tableShow=!tableShow\" mdTooltip=\"Show registered users\" mdTooltipPosition=\"right\"><md-icon>info_outline</md-icon></button>\n              <button md-raised-button color=\"primary\" type=\"submit\" *ngIf=\"!loginView\" id=\"sign-up-btn\">Sign up</button>\n            </div>\n\n          </form>\n\n          <div *ngIf=\"loginView && tableShow\">\n            <table>\n              <tr>\n                <th>Email</th>\n                <th>Password</th>\n              </tr>\n              <tr>\n                <td>teacher@gmail.com</td>\n                <td>pass</td>\n              </tr>\n              <tr>\n                <td>student1@gmail.com</td>\n                <td>pass</td>\n              </tr>\n              <tr>\n                <td>student2@gmail.com</td>\n                <td>pass</td>\n              </tr>\n            </table>\n          </div>\n\n        </md-card-content>\n\n        <md-card-actions>\n          <div *ngIf=\"loginView\">Not registered yet?<button md-button (click)=\"setLoginView(false); tableShow=false; myForm.reset()\" class=\"card-button\">Sign up</button></div>\n          <div *ngIf=\"!loginView\">Already registered?<button md-button (click)=\"setLoginView(true); myForm.reset()\" class=\"card-button\">Log in</button></div>\n        </md-card-actions>\n\n      </md-card>\n\n    </div>\n\n  </div>\n</div>\n"
 
 /***/ }),
 
-/***/ 830:
+/***/ 826:
 /***/ (function(module, exports) {
 
 module.exports = "<div fxLayout=\"row\" fxLayoutAlign=\"center center\">\n  <div class=\"div-inner-main\" [style.xs]=\"{'width': '100%'}\">\n\n    <div>MY PROFILE</div>\n    <table>\n      <tr>\n        <td>Name</td>\n        <th>{{authenticationService.getCurrentUser().nickName}}</th>\n      </tr>\n      <tr>\n        <td>Email</td>\n        <th>{{authenticationService.getCurrentUser().name}}</th>\n      </tr>\n    </table>\n    \n  </div>\n</div>\n"
 
 /***/ }),
 
-/***/ 831:
+/***/ 827:
 /***/ (function(module, exports) {
 
 module.exports = "<div id=\"header-div\">\n    <md-icon id=\"back-btn\" (click)=\"location.back()\" [title]=\"'Back to lessons'\">keyboard_arrow_left</md-icon>\n    <md-icon class=\"right-btn\" (click)=\"toggleFullScreen()\" [title]=\"'Fullscreen'\">{{fullscreenIcon}}</md-icon>\n    <md-icon class=\"right-btn\" (click)=\"toggleLocalVideo()\" [title]=\"'Toggle video'\">{{videoIcon}}</md-icon>\n    <md-icon class=\"right-btn\" (click)=\"toggleLocalAudio()\" [title]=\"'Toggle audio'\">{{audioIcon}}</md-icon>\n    <h1>{{lesson?.title}}</h1>\n</div>\n<div id=\"publisher\"></div>\n<div id=\"subscriber\"></div>"
