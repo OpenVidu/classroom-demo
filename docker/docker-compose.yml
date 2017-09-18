@@ -20,7 +20,7 @@ services:
     environment:
       - WAIT_HOSTS=mysql:3306
       - WAIT_HOSTS_TIMEOUT=120
-      - KMS_STUN_IP=193.147.51.12
-      - KMS_STUN_PORT=3478
+      - KMS_STUN_IP=stun.l.google.com
+      - KMS_STUN_PORT=19302
       - openvidu.secret=MY_SECRET
   

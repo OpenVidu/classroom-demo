@@ -531,6 +531,9 @@ var SessionInternal = (function () {
                 callback('ERROR CONNECTING TO OPENVIDU');
             }
             else {
+                if (!token) {
+                    token = _this.randomToken();
+                }
                 var joinParams = {
                     token: token,
                     session: _this.sessionId,
@@ -918,6 +921,17 @@ var SessionInternal = (function () {
         if (pos != -1) {
             this.participantsSpeaking.splice(pos, 1);
         }
+    };
+    SessionInternal.prototype.stringClientMetadata = function (metadata) {
+        if (!(typeof metadata === 'string')) {
+            return JSON.stringify(metadata);
+        }
+        else {
+            return metadata;
+        }
+    };
+    SessionInternal.prototype.randomToken = function () {
+        return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     };
     return SessionInternal;
 }());
@@ -2843,11 +2857,11 @@ var Session = (function () {
     }
     Session.prototype.connect = function (param1, param2, param3) {
         // Early configuration to deactivate automatic subscription to streams
-        if (typeof param2 == "string") {
+        if (param3) {
             this.session.configure({
                 sessionId: this.session.getSessionId(),
                 participantId: param1,
-                metadata: param2,
+                metadata: this.session.stringClientMetadata(param2),
                 subscribeToStreams: false
             });
             this.session.connect(param1, param3);
@@ -3386,13 +3400,10 @@ var User = (function () {
 
 "use strict";
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return environment; });
-// The file contents for the current environment will overwrite these during build.
-// The build system defaults to the dev environment which uses `environment.ts`, but if you do
-// `ng build --env=prod` then `environment.prod.ts` will be used instead.
-// The list of which env maps to which file can be found in `.angular-cli.json`.
 var environment = {
     production: false,
-    URL_BACK: 'https://localhost:5000'
+    envName: 'container',
+    URL_BACK: window.location.origin
 };
 //# sourceMappingURL=environment.js.map
 
