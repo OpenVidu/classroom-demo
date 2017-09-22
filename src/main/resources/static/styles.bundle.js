@@ -1,6 +1,6 @@
 webpackJsonp([2,4],{
 
-/***/ 1123:
+/***/ 1061:
 /***/ (function(module, exports) {
 
 /*
@@ -253,15 +253,15 @@ function updateLink(linkElement, obj) {
 
 /***/ }),
 
-/***/ 1140:
+/***/ 1079:
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(565);
+module.exports = __webpack_require__(532);
 
 
 /***/ }),
 
-/***/ 49:
+/***/ 44:
 /***/ (function(module, exports) {
 
 /*
@@ -318,16 +318,16 @@ module.exports = function() {
 
 /***/ }),
 
-/***/ 565:
+/***/ 532:
 /***/ (function(module, exports, __webpack_require__) {
 
 // style-loader: Adds some css to the DOM by adding a <style> tag
 
 // load the styles
-var content = __webpack_require__(793);
+var content = __webpack_require__(760);
 if(typeof content === 'string') content = [[module.i, content, '']];
 // add the styles to the DOM
-var update = __webpack_require__(1123)(content, {});
+var update = __webpack_require__(1061)(content, {});
 if(content.locals) module.exports = content.locals;
 // Hot Module Replacement
 if(false) {
@@ -345,10 +345,10 @@ if(false) {
 
 /***/ }),
 
-/***/ 792:
+/***/ 759:
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(49)();
+exports = module.exports = __webpack_require__(44)();
 // imports
 
 
@@ -360,12 +360,12 @@ exports.push([module.i, ".mat-elevation-z0{box-shadow:0 0 0 0 rgba(0,0,0,.2),0 0
 
 /***/ }),
 
-/***/ 793:
+/***/ 760:
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(49)();
+exports = module.exports = __webpack_require__(44)();
 // imports
-exports.i(__webpack_require__(792), "");
+exports.i(__webpack_require__(759), "");
 
 // module
 exports.push([module.i, "* {\n  font-family: 'Exo 2', sans-serif;\n}\n\nhtml,\nbody {\n  height: 100%;\n  margin: 0;\n  padding: 0;\n  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.05);\n}\n\nmain {\n  -webkit-box-flex: 1;\n      -ms-flex: 1;\n          flex: 1;\n}\n\na {\n  color: #fff;\n  text-decoration: none;\n}\n\nli {\n  list-style: none;\n}\n\nmd-icon {\n  cursor: pointer;\n}\n\nmd-icon:hover {\n  color: grey;\n}\n\n.container {\n  padding: 25px;\n}\n\n.mat-sidenav-content {\n  min-height: 100% !important;\n  display: -webkit-box !important;\n  display: -ms-flexbox !important;\n  display: flex !important;\n  -webkit-box-orient: vertical !important;\n  -webkit-box-direction: normal !important;\n      -ms-flex-direction: column !important;\n          flex-direction: column !important;\n}\n\n.hover-link:hover {\n  color: #ffd740 !important;\n}\n\n.feedback-list {\n  font-weight: 500;\n  margin-top: 5px;\n  margin-left: 2em;\n  display: list-item;\n}\n\n.div-inner-main {\n  min-width: 30%;\n  margin-left: 20px;\n  margin-right: 20px;\n  margin-top: 50px;\n  margin-bottom: 50px;\n}\n\n.block-btn {\n  display: inline-block;\n}\n\n#publisher {\n  position: absolute;\n  width: 100%;\n}\n\n#publisher video {\n  width: 100%;\n}\n\n/*#subscriber {\n  position: absolute;\n  bottom: 0;\n}*/\n\n#subscriber video {\n  width: 100%;\n}\n\n\n/* Colors of Deep Purple Material Theme */\n\n.back-primary {\n  background: #673ab7 !important;\n}\n\n.back-accent {\n  background: #ffd740;\n}\n\n.back-warn {\n  background: #f44336;\n}\n\n.back-secondary {\n  background: #D1C4E9;\n}\n\n.color-primary {\n  color: #673ab7 !important;\n}\n\n.color-accent {\n  color: #ffd740;\n}\n\n.color-warn {\n  color: #f44336;\n}\n\n.color-secondary {\n  color: #D1C4E9;\n}\n\n\n/*Loader*/\n\n.cssload-container {\n  position: absolute;\n  top: 50%;\n  left: 50%;\n  z-index: 1000;\n  margin: -25px 0 0 -25px;\n  border-radius: 50%;\n  width: 50px;\n  height: 50px;\n}\n\n.cssload-tube-tunnel {\n  width: 56px;\n  height: 56px;\n  margin: 0 auto;\n  border: 5px solid;\n  border-radius: 50%;\n  border-color: #673ab7;\n  animation: cssload-scale 1035ms infinite linear;\n  -o-animation: cssload-scale 1035ms infinite linear;\n  -ms-animation: cssload-scale 1035ms infinite linear;\n  -webkit-animation: cssload-scale 1035ms infinite linear;\n  -moz-animation: cssload-scale 1035ms infinite linear;\n}\n\n@keyframes cssload-scale {\n  0% {\n    -webkit-transform: scale(0);\n            transform: scale(0);\n    transform: scale(0);\n  }\n  90% {\n    -webkit-transform: scale(0.7);\n            transform: scale(0.7);\n    transform: scale(0.7);\n  }\n  100% {\n    -webkit-transform: scale(1);\n            transform: scale(1);\n    transform: scale(1);\n  }\n}\n\n@-webkit-keyframes cssload-scale {\n  0% {\n    -webkit-transform: scale(0);\n    transform: scale(0);\n  }\n  90% {\n    -webkit-transform: scale(0.7);\n    transform: scale(0.7);\n  }\n  100% {\n    -webkit-transform: scale(1);\n    transform: scale(1);\n  }\n}\n\n.filtered {\n  -webkit-filter: blur(5px);\n          filter: blur(5px);\n}\n\n\n/*End Loader*/\n", ""]);
@@ -375,5 +375,5 @@ exports.push([module.i, "* {\n  font-family: 'Exo 2', sans-serif;\n}\n\nhtml,\nb
 
 /***/ })
 
-},[1140]);
+},[1079]);
 //# sourceMappingURL=styles.bundle.js.map

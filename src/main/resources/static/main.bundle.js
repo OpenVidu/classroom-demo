@@ -1,13 +1,62 @@
 webpackJsonp([1,4],{
 
-/***/ 1119:
+/***/ 1048:
+/***/ (function(module, exports) {
+
+function Mapper() {
+    var sources = {};
+    this.forEach = function (callback) {
+        for (var key in sources) {
+            var source = sources[key];
+            for (var key2 in source)
+                callback(source[key2]);
+        }
+        ;
+    };
+    this.get = function (id, source) {
+        var ids = sources[source];
+        if (ids == undefined)
+            return undefined;
+        return ids[id];
+    };
+    this.remove = function (id, source) {
+        var ids = sources[source];
+        if (ids == undefined)
+            return;
+        delete ids[id];
+        // Check it's empty
+        for (var i in ids) {
+            return false;
+        }
+        delete sources[source];
+    };
+    this.set = function (value, id, source) {
+        if (value == undefined)
+            return this.remove(id, source);
+        var ids = sources[source];
+        if (ids == undefined)
+            sources[source] = ids = {};
+        ids[id] = value;
+    };
+}
+;
+Mapper.prototype.pop = function (id, source) {
+    var value = this.get(id, source);
+    if (value == undefined)
+        return undefined;
+    this.remove(id, source);
+    return value;
+};
+module.exports = Mapper;
+
+
+/***/ }),
+
+/***/ 1049:
 /***/ (function(module, exports, __webpack_require__) {
 
-"use strict";
-
-Object.defineProperty(exports, "__esModule", { value: true });
 /*
- * (C) Copyright 2016 OpenVidu (http://kurento.org/)
+ * (C) Copyright 2014 Kurento (http://kurento.org/)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,16 +71,1127 @@ Object.defineProperty(exports, "__esModule", { value: true });
  * limitations under the License.
  *
  */
-var OpenViduInternal_1 = __webpack_require__(1121);
-var Session_1 = __webpack_require__(555);
-var Publisher_1 = __webpack_require__(554);
-var adapter = __webpack_require__(561);
+var JsonRpcClient = __webpack_require__(1050);
+exports.JsonRpcClient = JsonRpcClient;
+
+
+/***/ }),
+
+/***/ 1050:
+/***/ (function(module, exports, __webpack_require__) {
+
+/*
+ * (C) Copyright 2014 Kurento (http://kurento.org/)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+var RpcBuilder = __webpack_require__(523);
+var WebSocketWithReconnection = __webpack_require__(522);
+Date.now = Date.now || function () {
+    return +new Date;
+};
+var PING_INTERVAL = 5000;
+var RECONNECTING = 'RECONNECTING';
+var CONNECTED = 'CONNECTED';
+var DISCONNECTED = 'DISCONNECTED';
+var Logger = console;
+/**
+ *
+ * heartbeat: interval in ms for each heartbeat message,
+ * sendCloseMessage : true / false, before closing the connection, it sends a closeSession message
+ * <pre>
+ * ws : {
+ * 	uri : URI to conntect to,
+ *  useSockJS : true (use SockJS) / false (use WebSocket) by default,
+ * 	onconnected : callback method to invoke when connection is successful,
+ * 	ondisconnect : callback method to invoke when the connection is lost,
+ * 	onreconnecting : callback method to invoke when the client is reconnecting,
+ * 	onreconnected : callback method to invoke when the client succesfully reconnects,
+ * 	onerror : callback method to invoke when there is an error
+ * },
+ * rpc : {
+ * 	requestTimeout : timeout for a request,
+ * 	sessionStatusChanged: callback method for changes in session status,
+ * 	mediaRenegotiation: mediaRenegotiation
+ * }
+ * </pre>
+ */
+function JsonRpcClient(configuration) {
+    var self = this;
+    var wsConfig = configuration.ws;
+    var notReconnectIfNumLessThan = -1;
+    var pingNextNum = 0;
+    var enabledPings = true;
+    var pingPongStarted = false;
+    var pingInterval;
+    var status = DISCONNECTED;
+    var onreconnecting = wsConfig.onreconnecting;
+    var onreconnected = wsConfig.onreconnected;
+    var onconnected = wsConfig.onconnected;
+    var onerror = wsConfig.onerror;
+    configuration.rpc.pull = function (params, request) {
+        request.reply(null, "push");
+    };
+    wsConfig.onreconnecting = function () {
+        Logger.debug("--------- ONRECONNECTING -----------");
+        if (status === RECONNECTING) {
+            Logger.error("Websocket already in RECONNECTING state when receiving a new ONRECONNECTING message. Ignoring it");
+            return;
+        }
+        status = RECONNECTING;
+        if (onreconnecting) {
+            onreconnecting();
+        }
+    };
+    wsConfig.onreconnected = function () {
+        Logger.debug("--------- ONRECONNECTED -----------");
+        if (status === CONNECTED) {
+            Logger.error("Websocket already in CONNECTED state when receiving a new ONRECONNECTED message. Ignoring it");
+            return;
+        }
+        status = CONNECTED;
+        enabledPings = true;
+        updateNotReconnectIfLessThan();
+        usePing();
+        if (onreconnected) {
+            onreconnected();
+        }
+    };
+    wsConfig.onconnected = function () {
+        Logger.debug("--------- ONCONNECTED -----------");
+        if (status === CONNECTED) {
+            Logger.error("Websocket already in CONNECTED state when receiving a new ONCONNECTED message. Ignoring it");
+            return;
+        }
+        status = CONNECTED;
+        enabledPings = true;
+        usePing();
+        if (onconnected) {
+            onconnected();
+        }
+    };
+    wsConfig.onerror = function (error) {
+        Logger.debug("--------- ONERROR -----------");
+        status = DISCONNECTED;
+        if (onerror) {
+            onerror(error);
+        }
+    };
+    var ws = new WebSocketWithReconnection(wsConfig);
+    Logger.debug('Connecting websocket to URI: ' + wsConfig.uri);
+    var rpcBuilderOptions = {
+        request_timeout: configuration.rpc.requestTimeout,
+        ping_request_timeout: configuration.rpc.heartbeatRequestTimeout
+    };
+    var rpc = new RpcBuilder(RpcBuilder.packers.JsonRPC, rpcBuilderOptions, ws, function (request) {
+        Logger.debug('Received request: ' + JSON.stringify(request));
+        try {
+            var func = configuration.rpc[request.method];
+            if (func === undefined) {
+                Logger.error("Method " + request.method + " not registered in client");
+            }
+            else {
+                func(request.params, request);
+            }
+        }
+        catch (err) {
+            Logger.error('Exception processing request: ' + JSON.stringify(request));
+            Logger.error(err);
+        }
+    });
+    this.send = function (method, params, callback) {
+        if (method !== 'ping') {
+            Logger.debug('Request: method:' + method + " params:" + JSON.stringify(params));
+        }
+        var requestTime = Date.now();
+        rpc.encode(method, params, function (error, result) {
+            if (error) {
+                try {
+                    Logger.error("ERROR:" + error.message + " in Request: method:" +
+                        method + " params:" + JSON.stringify(params) + " request:" +
+                        error.request);
+                    if (error.data) {
+                        Logger.error("ERROR DATA:" + JSON.stringify(error.data));
+                    }
+                }
+                catch (e) { }
+                error.requestTime = requestTime;
+            }
+            if (callback) {
+                if (result != undefined && result.value !== 'pong') {
+                    Logger.debug('Response: ' + JSON.stringify(result));
+                }
+                callback(error, result);
+            }
+        });
+    };
+    function updateNotReconnectIfLessThan() {
+        Logger.debug("notReconnectIfNumLessThan = " + pingNextNum + ' (old=' +
+            notReconnectIfNumLessThan + ')');
+        notReconnectIfNumLessThan = pingNextNum;
+    }
+    function sendPing() {
+        if (enabledPings) {
+            var params = null;
+            if (pingNextNum == 0 || pingNextNum == notReconnectIfNumLessThan) {
+                params = {
+                    interval: configuration.heartbeat || PING_INTERVAL
+                };
+            }
+            pingNextNum++;
+            self.send('ping', params, (function (pingNum) {
+                return function (error, result) {
+                    if (error) {
+                        Logger.debug("Error in ping request #" + pingNum + " (" +
+                            error.message + ")");
+                        if (pingNum > notReconnectIfNumLessThan) {
+                            enabledPings = false;
+                            updateNotReconnectIfLessThan();
+                            Logger.debug("Server did not respond to ping message #" +
+                                pingNum + ". Reconnecting... ");
+                            ws.reconnectWs();
+                        }
+                    }
+                };
+            })(pingNextNum));
+        }
+        else {
+            Logger.debug("Trying to send ping, but ping is not enabled");
+        }
+    }
+    /*
+    * If configuration.hearbeat has any value, the ping-pong will work with the interval
+    * of configuration.hearbeat
+    */
+    function usePing() {
+        if (!pingPongStarted) {
+            Logger.debug("Starting ping (if configured)");
+            pingPongStarted = true;
+            if (configuration.heartbeat != undefined) {
+                pingInterval = setInterval(sendPing, configuration.heartbeat);
+                sendPing();
+            }
+        }
+    }
+    this.close = function () {
+        Logger.debug("Closing jsonRpcClient explicitly by client");
+        if (pingInterval != undefined) {
+            Logger.debug("Clearing ping interval");
+            clearInterval(pingInterval);
+        }
+        pingPongStarted = false;
+        enabledPings = false;
+        if (configuration.sendCloseMessage) {
+            Logger.debug("Sending close message");
+            this.send('closeSession', null, function (error, result) {
+                if (error) {
+                    Logger.error("Error sending close message: " + JSON.stringify(error));
+                }
+                ws.close();
+            });
+        }
+        else {
+            ws.close();
+        }
+    };
+    // This method is only for testing
+    this.forceClose = function (millis) {
+        ws.forceClose(millis);
+    };
+    this.reconnect = function () {
+        ws.reconnectWs();
+    };
+}
+module.exports = JsonRpcClient;
+
+
+/***/ }),
+
+/***/ 1051:
+/***/ (function(module, exports, __webpack_require__) {
+
+/*
+ * (C) Copyright 2014 Kurento (http://kurento.org/)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+var WebSocketWithReconnection = __webpack_require__(522);
+exports.WebSocketWithReconnection = WebSocketWithReconnection;
+
+
+/***/ }),
+
+/***/ 1052:
+/***/ (function(module, exports) {
+
+/**
+ * JsonRPC 2.0 packer
+ */
+/**
+ * Pack a JsonRPC 2.0 message
+ *
+ * @param {Object} message - object to be packaged. It requires to have all the
+ *   fields needed by the JsonRPC 2.0 message that it's going to be generated
+ *
+ * @return {String} - the stringified JsonRPC 2.0 message
+ */
+function pack(message, id) {
+    var result = {
+        jsonrpc: "2.0"
+    };
+    // Request
+    if (message.method) {
+        result.method = message.method;
+        if (message.params)
+            result.params = message.params;
+        // Request is a notification
+        if (id != undefined)
+            result.id = id;
+    }
+    else if (id != undefined) {
+        if (message.error) {
+            if (message.result !== undefined)
+                throw new TypeError("Both result and error are defined");
+            result.error = message.error;
+        }
+        else if (message.result !== undefined)
+            result.result = message.result;
+        else
+            throw new TypeError("No result or error is defined");
+        result.id = id;
+    }
+    ;
+    return JSON.stringify(result);
+}
+;
+/**
+ * Unpack a JsonRPC 2.0 message
+ *
+ * @param {String} message - string with the content of the JsonRPC 2.0 message
+ *
+ * @throws {TypeError} - Invalid JsonRPC version
+ *
+ * @return {Object} - object filled with the JsonRPC 2.0 message content
+ */
+function unpack(message) {
+    var result = message;
+    if (typeof message === 'string' || message instanceof String) {
+        result = JSON.parse(message);
+    }
+    // Check if it's a valid message
+    var version = result.jsonrpc;
+    if (version !== '2.0')
+        throw new TypeError("Invalid JsonRPC version '" + version + "': " + message);
+    // Response
+    if (result.method == undefined) {
+        if (result.id == undefined)
+            throw new TypeError("Invalid message: " + message);
+        var result_defined = result.result !== undefined;
+        var error_defined = result.error !== undefined;
+        // Check only result or error is defined, not both or none
+        if (result_defined && error_defined)
+            throw new TypeError("Both result and error are defined: " + message);
+        if (!result_defined && !error_defined)
+            throw new TypeError("No result or error is defined: " + message);
+        result.ack = result.id;
+        delete result.id;
+    }
+    // Return unpacked message
+    return result;
+}
+;
+exports.pack = pack;
+exports.unpack = unpack;
+
+
+/***/ }),
+
+/***/ 1053:
+/***/ (function(module, exports) {
+
+function pack(message) {
+    throw new TypeError("Not yet implemented");
+}
+;
+function unpack(message) {
+    throw new TypeError("Not yet implemented");
+}
+;
+exports.pack = pack;
+exports.unpack = unpack;
+
+
+/***/ }),
+
+/***/ 1054:
+/***/ (function(module, exports, __webpack_require__) {
+
+var JsonRPC = __webpack_require__(1052);
+var XmlRPC = __webpack_require__(1053);
+exports.JsonRPC = JsonRPC;
+exports.XmlRPC = XmlRPC;
+
+
+/***/ }),
+
+/***/ 1055:
+/***/ (function(module, exports, __webpack_require__) {
+
+/*
+ * (C) Copyright 2014-2015 Kurento (http://kurento.org/)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+var freeice = __webpack_require__(768);
+var inherits = __webpack_require__(481);
+var UAParser = __webpack_require__(1062);
+var uuid = __webpack_require__(1064);
+var hark = __webpack_require__(770);
+var EventEmitter = __webpack_require__(480).EventEmitter;
+var recursive = __webpack_require__(774).recursive.bind(undefined, true);
+var sdpTranslator = __webpack_require__(1044);
+var logger = window.Logger || console;
+// var gUM = navigator.mediaDevices.getUserMedia || function (constraints) {
+//   return new Promise(navigator.getUserMedia(constraints, function (stream) {
+//     videoStream = stream
+//     start()
+//   }).eror(callback));
+// }
+try {
+    __webpack_require__(773);
+}
+catch (error) {
+    if (typeof getScreenConstraints === 'undefined') {
+        logger.warn('screen sharing is not available');
+        getScreenConstraints = function getScreenConstraints(sendSource, callback) {
+            callback(new Error("This library is not enabled for screen sharing"));
+        };
+    }
+}
+var MEDIA_CONSTRAINTS = {
+    audio: true,
+    video: {
+        width: 640,
+        framerate: 15
+    }
+};
+// Somehow, the UAParser constructor gets an empty window object.
+// We need to pass the user agent string in order to get information
+var ua = (window && window.navigator) ? window.navigator.userAgent : '';
+var parser = new UAParser(ua);
+var browser = parser.getBrowser();
+var usePlanB = false;
+if (browser.name === 'Chrome' || browser.name === 'Chromium') {
+    logger.debug(browser.name + ": using SDP PlanB");
+    usePlanB = true;
+}
+function noop(error) {
+    if (error)
+        logger.error(error);
+}
+function trackStop(track) {
+    track.stop && track.stop();
+}
+function streamStop(stream) {
+    stream.getTracks().forEach(trackStop);
+}
+/**
+ * Returns a string representation of a SessionDescription object.
+ */
+var dumpSDP = function (description) {
+    if (typeof description === 'undefined' || description === null) {
+        return '';
+    }
+    return 'type: ' + description.type + '\r\n' + description.sdp;
+};
+function bufferizeCandidates(pc, onerror) {
+    var candidatesQueue = [];
+    pc.addEventListener('signalingstatechange', function () {
+        if (this.signalingState === 'stable') {
+            while (candidatesQueue.length) {
+                var entry = candidatesQueue.shift();
+                this.addIceCandidate(entry.candidate, entry.callback, entry.callback);
+            }
+        }
+    });
+    return function (candidate, callback) {
+        callback = callback || onerror;
+        switch (pc.signalingState) {
+            case 'closed':
+                callback(new Error('PeerConnection object is closed'));
+                break;
+            case 'stable':
+                if (pc.remoteDescription) {
+                    pc.addIceCandidate(candidate, callback, callback);
+                    break;
+                }
+            default:
+                candidatesQueue.push({
+                    candidate: candidate,
+                    callback: callback
+                });
+        }
+    };
+}
+/* Simulcast utilities */
+function removeFIDFromOffer(sdp) {
+    var n = sdp.indexOf("a=ssrc-group:FID");
+    if (n > 0) {
+        return sdp.slice(0, n);
+    }
+    else {
+        return sdp;
+    }
+}
+function getSimulcastInfo(videoStream) {
+    var videoTracks = videoStream.getVideoTracks();
+    if (!videoTracks.length) {
+        logger.warn('No video tracks available in the video stream');
+        return '';
+    }
+    var lines = [
+        'a=x-google-flag:conference',
+        'a=ssrc-group:SIM 1 2 3',
+        'a=ssrc:1 cname:localVideo',
+        'a=ssrc:1 msid:' + videoStream.id + ' ' + videoTracks[0].id,
+        'a=ssrc:1 mslabel:' + videoStream.id,
+        'a=ssrc:1 label:' + videoTracks[0].id,
+        'a=ssrc:2 cname:localVideo',
+        'a=ssrc:2 msid:' + videoStream.id + ' ' + videoTracks[0].id,
+        'a=ssrc:2 mslabel:' + videoStream.id,
+        'a=ssrc:2 label:' + videoTracks[0].id,
+        'a=ssrc:3 cname:localVideo',
+        'a=ssrc:3 msid:' + videoStream.id + ' ' + videoTracks[0].id,
+        'a=ssrc:3 mslabel:' + videoStream.id,
+        'a=ssrc:3 label:' + videoTracks[0].id
+    ];
+    lines.push('');
+    return lines.join('\n');
+}
+/**
+ * Wrapper object of an RTCPeerConnection. This object is aimed to simplify the
+ * development of WebRTC-based applications.
+ *
+ * @constructor module:kurentoUtils.WebRtcPeer
+ *
+ * @param {String} mode Mode in which the PeerConnection will be configured.
+ *  Valid values are: 'recv', 'send', and 'sendRecv'
+ * @param localVideo Video tag for the local stream
+ * @param remoteVideo Video tag for the remote stream
+ * @param {MediaStream} videoStream Stream to be used as primary source
+ *  (typically video and audio, or only video if combined with audioStream) for
+ *  localVideo and to be added as stream to the RTCPeerConnection
+ * @param {MediaStream} audioStream Stream to be used as second source
+ *  (typically for audio) for localVideo and to be added as stream to the
+ *  RTCPeerConnection
+ */
+function WebRtcPeer(mode, options, callback) {
+    if (!(this instanceof WebRtcPeer)) {
+        return new WebRtcPeer(mode, options, callback);
+    }
+    WebRtcPeer.super_.call(this);
+    if (options instanceof Function) {
+        callback = options;
+        options = undefined;
+    }
+    options = options || {};
+    callback = (callback || noop).bind(this);
+    var self = this;
+    var localVideo = options.localVideo;
+    var remoteVideo = options.remoteVideo;
+    var videoStream = options.videoStream;
+    var audioStream = options.audioStream;
+    var mediaConstraints = options.mediaConstraints;
+    var connectionConstraints = options.connectionConstraints;
+    var pc = options.peerConnection;
+    var sendSource = options.sendSource || 'webcam';
+    var dataChannelConfig = options.dataChannelConfig;
+    var useDataChannels = options.dataChannels || false;
+    var dataChannel;
+    var guid = uuid.v4();
+    var configuration = recursive({
+        iceServers: freeice()
+    }, options.configuration);
+    var onicecandidate = options.onicecandidate;
+    if (onicecandidate)
+        this.on('icecandidate', onicecandidate);
+    var oncandidategatheringdone = options.oncandidategatheringdone;
+    if (oncandidategatheringdone) {
+        this.on('candidategatheringdone', oncandidategatheringdone);
+    }
+    var simulcast = options.simulcast;
+    var multistream = options.multistream;
+    var interop = new sdpTranslator.Interop();
+    var candidatesQueueOut = [];
+    var candidategatheringdone = false;
+    Object.defineProperties(this, {
+        'peerConnection': {
+            get: function () {
+                return pc;
+            }
+        },
+        'id': {
+            value: options.id || guid,
+            writable: false
+        },
+        'remoteVideo': {
+            get: function () {
+                return remoteVideo;
+            }
+        },
+        'localVideo': {
+            get: function () {
+                return localVideo;
+            }
+        },
+        'dataChannel': {
+            get: function () {
+                return dataChannel;
+            }
+        },
+        /**
+         * @member {(external:ImageData|undefined)} currentFrame
+         */
+        'currentFrame': {
+            get: function () {
+                // [ToDo] Find solution when we have a remote stream but we didn't set
+                // a remoteVideo tag
+                if (!remoteVideo)
+                    return;
+                if (remoteVideo.readyState < remoteVideo.HAVE_CURRENT_DATA)
+                    throw new Error('No video stream data available');
+                var canvas = document.createElement('canvas');
+                canvas.width = remoteVideo.videoWidth;
+                canvas.height = remoteVideo.videoHeight;
+                canvas.getContext('2d').drawImage(remoteVideo, 0, 0);
+                return canvas;
+            }
+        }
+    });
+    // Init PeerConnection
+    if (!pc) {
+        pc = new RTCPeerConnection(configuration);
+        if (useDataChannels && !dataChannel) {
+            var dcId = 'WebRtcPeer-' + self.id;
+            var dcOptions = undefined;
+            if (dataChannelConfig) {
+                dcId = dataChannelConfig.id || dcId;
+                dcOptions = dataChannelConfig.options;
+            }
+            dataChannel = pc.createDataChannel(dcId, dcOptions);
+            if (dataChannelConfig) {
+                dataChannel.onopen = dataChannelConfig.onopen;
+                dataChannel.onclose = dataChannelConfig.onclose;
+                dataChannel.onmessage = dataChannelConfig.onmessage;
+                dataChannel.onbufferedamountlow = dataChannelConfig.onbufferedamountlow;
+                dataChannel.onerror = dataChannelConfig.onerror || noop;
+            }
+        }
+    }
+    pc.addEventListener('icecandidate', function (event) {
+        var candidate = event.candidate;
+        if (EventEmitter.listenerCount(self, 'icecandidate') ||
+            EventEmitter.listenerCount(self, 'candidategatheringdone')) {
+            if (candidate) {
+                var cand;
+                if (multistream && usePlanB) {
+                    cand = interop.candidateToUnifiedPlan(candidate);
+                }
+                else {
+                    cand = candidate;
+                }
+                self.emit('icecandidate', cand);
+                candidategatheringdone = false;
+            }
+            else if (!candidategatheringdone) {
+                self.emit('candidategatheringdone');
+                candidategatheringdone = true;
+            }
+        }
+        else if (!candidategatheringdone) {
+            // Not listening to 'icecandidate' or 'candidategatheringdone' events, queue
+            // the candidate until one of them is listened
+            candidatesQueueOut.push(candidate);
+            if (!candidate)
+                candidategatheringdone = true;
+        }
+    });
+    pc.ontrack = options.onaddstream;
+    pc.onnegotiationneeded = options.onnegotiationneeded;
+    this.on('newListener', function (event, listener) {
+        if (event === 'icecandidate' || event === 'candidategatheringdone') {
+            while (candidatesQueueOut.length) {
+                var candidate = candidatesQueueOut.shift();
+                if (!candidate === (event === 'candidategatheringdone')) {
+                    listener(candidate);
+                }
+            }
+        }
+    });
+    var addIceCandidate = bufferizeCandidates(pc);
+    /**
+     * Callback function invoked when an ICE candidate is received. Developers are
+     * expected to invoke this function in order to complete the SDP negotiation.
+     *
+     * @function module:kurentoUtils.WebRtcPeer.prototype.addIceCandidate
+     *
+     * @param iceCandidate - Literal object with the ICE candidate description
+     * @param callback - Called when the ICE candidate has been added.
+     */
+    this.addIceCandidate = function (iceCandidate, callback) {
+        var candidate;
+        if (multistream && usePlanB) {
+            candidate = interop.candidateToPlanB(iceCandidate);
+        }
+        else {
+            candidate = new RTCIceCandidate(iceCandidate);
+        }
+        logger.debug('Remote ICE candidate received', iceCandidate);
+        callback = (callback || noop).bind(this);
+        addIceCandidate(candidate, callback);
+    };
+    this.generateOffer = function (callback) {
+        callback = callback.bind(this);
+        var offerAudio = true;
+        var offerVideo = true;
+        // Constraints must have both blocks
+        if (mediaConstraints) {
+            offerAudio = (typeof mediaConstraints.audio === 'boolean') ?
+                mediaConstraints.audio : true;
+            offerVideo = (typeof mediaConstraints.video === 'boolean') ?
+                mediaConstraints.video : true;
+        }
+        var browserDependantConstraints = {
+            offerToReceiveAudio: (mode !== 'sendonly' && offerAudio),
+            offerToReceiveVideo: (mode !== 'sendonly' && offerVideo)
+        };
+        //FIXME: clarify possible constraints passed to createOffer()
+        /*var constraints = recursive(browserDependantConstraints,
+          connectionConstraints)*/
+        var constraints = browserDependantConstraints;
+        logger.debug('constraints: ' + JSON.stringify(constraints));
+        pc.createOffer(constraints).then(function (offer) {
+            logger.debug('Created SDP offer');
+            offer = mangleSdpToAddSimulcast(offer);
+            return pc.setLocalDescription(offer);
+        }).then(function () {
+            var localDescription = pc.localDescription;
+            logger.debug('Local description set', localDescription.sdp);
+            if (multistream && usePlanB) {
+                localDescription = interop.toUnifiedPlan(localDescription);
+                logger.debug('offer::origPlanB->UnifiedPlan', dumpSDP(localDescription));
+            }
+            callback(null, localDescription.sdp, self.processAnswer.bind(self));
+        }).catch(callback);
+    };
+    this.getLocalSessionDescriptor = function () {
+        return pc.localDescription;
+    };
+    this.getRemoteSessionDescriptor = function () {
+        return pc.remoteDescription;
+    };
+    function setRemoteVideo() {
+        if (remoteVideo) {
+            var stream = pc.getRemoteStreams()[0];
+            var url = stream ? URL.createObjectURL(stream) : '';
+            remoteVideo.pause();
+            remoteVideo.src = url;
+            remoteVideo.load();
+            logger.debug('Remote URL:', url);
+        }
+    }
+    this.showLocalVideo = function () {
+        localVideo.src = URL.createObjectURL(videoStream);
+        localVideo.muted = true;
+    };
+    this.send = function (data) {
+        if (dataChannel && dataChannel.readyState === 'open') {
+            dataChannel.send(data);
+        }
+        else {
+            logger.warn('Trying to send data over a non-existing or closed data channel');
+        }
+    };
+    /**
+     * Callback function invoked when a SDP answer is received. Developers are
+     * expected to invoke this function in order to complete the SDP negotiation.
+     *
+     * @function module:kurentoUtils.WebRtcPeer.prototype.processAnswer
+     *
+     * @param sdpAnswer - Description of sdpAnswer
+     * @param callback -
+     *            Invoked after the SDP answer is processed, or there is an error.
+     */
+    this.processAnswer = function (sdpAnswer, callback) {
+        callback = (callback || noop).bind(this);
+        var answer = new RTCSessionDescription({
+            type: 'answer',
+            sdp: sdpAnswer
+        });
+        if (multistream && usePlanB) {
+            var planBAnswer = interop.toPlanB(answer);
+            logger.debug('asnwer::planB', dumpSDP(planBAnswer));
+            answer = planBAnswer;
+        }
+        logger.debug('SDP answer received, setting remote description');
+        if (pc.signalingState === 'closed') {
+            return callback('PeerConnection is closed');
+        }
+        pc.setRemoteDescription(answer, function () {
+            setRemoteVideo();
+            callback();
+        }, callback);
+    };
+    /**
+     * Callback function invoked when a SDP offer is received. Developers are
+     * expected to invoke this function in order to complete the SDP negotiation.
+     *
+     * @function module:kurentoUtils.WebRtcPeer.prototype.processOffer
+     *
+     * @param sdpOffer - Description of sdpOffer
+     * @param callback - Called when the remote description has been set
+     *  successfully.
+     */
+    this.processOffer = function (sdpOffer, callback) {
+        callback = callback.bind(this);
+        var offer = new RTCSessionDescription({
+            type: 'offer',
+            sdp: sdpOffer
+        });
+        if (multistream && usePlanB) {
+            var planBOffer = interop.toPlanB(offer);
+            logger.debug('offer::planB', dumpSDP(planBOffer));
+            offer = planBOffer;
+        }
+        logger.debug('SDP offer received, setting remote description');
+        if (pc.signalingState === 'closed') {
+            return callback('PeerConnection is closed');
+        }
+        pc.setRemoteDescription(offer).then(function () {
+            return setRemoteVideo();
+        }).then(function () {
+            return pc.createAnswer();
+        }).then(function (answer) {
+            answer = mangleSdpToAddSimulcast(answer);
+            logger.debug('Created SDP answer');
+            return pc.setLocalDescription(answer);
+        }).then(function () {
+            var localDescription = pc.localDescription;
+            if (multistream && usePlanB) {
+                localDescription = interop.toUnifiedPlan(localDescription);
+                logger.debug('answer::origPlanB->UnifiedPlan', dumpSDP(localDescription));
+            }
+            logger.debug('Local description set', localDescription.sdp);
+            callback(null, localDescription.sdp);
+        }).catch(callback);
+    };
+    function mangleSdpToAddSimulcast(answer) {
+        if (simulcast) {
+            if (browser.name === 'Chrome' || browser.name === 'Chromium') {
+                logger.debug('Adding multicast info');
+                answer = new RTCSessionDescription({
+                    'type': answer.type,
+                    'sdp': removeFIDFromOffer(answer.sdp) + getSimulcastInfo(videoStream)
+                });
+            }
+            else {
+                logger.warn('Simulcast is only available in Chrome browser.');
+            }
+        }
+        return answer;
+    }
+    /**
+     * This function creates the RTCPeerConnection object taking into account the
+     * properties received in the constructor. It starts the SDP negotiation
+     * process: generates the SDP offer and invokes the onsdpoffer callback. This
+     * callback is expected to send the SDP offer, in order to obtain an SDP
+     * answer from another peer.
+     */
+    function start() {
+        if (pc.signalingState === 'closed') {
+            callback('The peer connection object is in "closed" state. This is most likely due to an invocation of the dispose method before accepting in the dialogue');
+        }
+        if (videoStream && localVideo) {
+            self.showLocalVideo();
+        }
+        if (videoStream) {
+            pc.addStream(videoStream);
+        }
+        if (audioStream) {
+            pc.addStream(audioStream);
+        }
+        // [Hack] https://code.google.com/p/chromium/issues/detail?id=443558
+        var browser = parser.getBrowser();
+        if (mode === 'sendonly' &&
+            (browser.name === 'Chrome' || browser.name === 'Chromium') &&
+            browser.major === 39) {
+            mode = 'sendrecv';
+        }
+        callback();
+    }
+    if (mode !== 'recvonly' && !videoStream && !audioStream) {
+        function getMedia(constraints) {
+            if (constraints === undefined) {
+                constraints = MEDIA_CONSTRAINTS;
+            }
+            navigator.mediaDevices.getUserMedia(constraints).then(function (stream) {
+                videoStream = stream;
+                start();
+            }).catch(callback);
+        }
+        if (sendSource === 'webcam') {
+            getMedia(mediaConstraints);
+        }
+        else {
+            getScreenConstraints(sendSource, function (error, constraints_) {
+                if (error)
+                    return callback(error);
+                constraints = [mediaConstraints];
+                constraints.unshift(constraints_);
+                getMedia(recursive.apply(undefined, constraints));
+            }, guid);
+        }
+    }
+    else {
+        setTimeout(start, 0);
+    }
+    this.on('_dispose', function () {
+        if (localVideo) {
+            localVideo.pause();
+            localVideo.src = '';
+            localVideo.load();
+            //Unmute local video in case the video tag is later used for remote video
+            localVideo.muted = false;
+        }
+        if (remoteVideo) {
+            remoteVideo.pause();
+            remoteVideo.src = '';
+            remoteVideo.load();
+        }
+        self.removeAllListeners();
+        if (window.cancelChooseDesktopMedia !== undefined) {
+            window.cancelChooseDesktopMedia(guid);
+        }
+    });
+}
+inherits(WebRtcPeer, EventEmitter);
+function createEnableDescriptor(type) {
+    var method = 'get' + type + 'Tracks';
+    return {
+        enumerable: true,
+        get: function () {
+            // [ToDo] Should return undefined if not all tracks have the same value?
+            if (!this.peerConnection)
+                return;
+            var streams = this.peerConnection.getLocalStreams();
+            if (!streams.length)
+                return;
+            for (var i = 0, stream; stream = streams[i]; i++) {
+                var tracks = stream[method]();
+                for (var j = 0, track; track = tracks[j]; j++)
+                    if (!track.enabled)
+                        return false;
+            }
+            return true;
+        },
+        set: function (value) {
+            function trackSetEnable(track) {
+                track.enabled = value;
+            }
+            this.peerConnection.getLocalStreams().forEach(function (stream) {
+                stream[method]().forEach(trackSetEnable);
+            });
+        }
+    };
+}
+Object.defineProperties(WebRtcPeer.prototype, {
+    'enabled': {
+        enumerable: true,
+        get: function () {
+            return this.audioEnabled && this.videoEnabled;
+        },
+        set: function (value) {
+            this.audioEnabled = this.videoEnabled = value;
+        }
+    },
+    'audioEnabled': createEnableDescriptor('Audio'),
+    'videoEnabled': createEnableDescriptor('Video')
+});
+WebRtcPeer.prototype.getLocalStream = function (index) {
+    if (this.peerConnection) {
+        return this.peerConnection.getLocalStreams()[index || 0];
+    }
+};
+WebRtcPeer.prototype.getRemoteStream = function (index) {
+    if (this.peerConnection) {
+        return this.peerConnection.getRemoteStreams()[index || 0];
+    }
+};
+/**
+ * @description This method frees the resources used by WebRtcPeer.
+ *
+ * @function module:kurentoUtils.WebRtcPeer.prototype.dispose
+ */
+WebRtcPeer.prototype.dispose = function () {
+    logger.debug('Disposing WebRtcPeer');
+    var pc = this.peerConnection;
+    var dc = this.dataChannel;
+    try {
+        if (dc) {
+            if (dc.signalingState === 'closed')
+                return;
+            dc.close();
+        }
+        if (pc) {
+            if (pc.signalingState === 'closed')
+                return;
+            pc.getLocalStreams().forEach(streamStop);
+            // FIXME This is not yet implemented in firefox
+            // if(videoStream) pc.removeStream(videoStream);
+            // if(audioStream) pc.removeStream(audioStream);
+            pc.close();
+        }
+    }
+    catch (err) {
+        logger.warn('Exception disposing webrtc peer ' + err);
+    }
+    this.emit('_dispose');
+};
+//
+// Specialized child classes
+//
+function WebRtcPeerRecvonly(options, callback) {
+    if (!(this instanceof WebRtcPeerRecvonly)) {
+        return new WebRtcPeerRecvonly(options, callback);
+    }
+    WebRtcPeerRecvonly.super_.call(this, 'recvonly', options, callback);
+}
+inherits(WebRtcPeerRecvonly, WebRtcPeer);
+function WebRtcPeerSendonly(options, callback) {
+    if (!(this instanceof WebRtcPeerSendonly)) {
+        return new WebRtcPeerSendonly(options, callback);
+    }
+    WebRtcPeerSendonly.super_.call(this, 'sendonly', options, callback);
+}
+inherits(WebRtcPeerSendonly, WebRtcPeer);
+function WebRtcPeerSendrecv(options, callback) {
+    if (!(this instanceof WebRtcPeerSendrecv)) {
+        return new WebRtcPeerSendrecv(options, callback);
+    }
+    WebRtcPeerSendrecv.super_.call(this, 'sendrecv', options, callback);
+}
+inherits(WebRtcPeerSendrecv, WebRtcPeer);
+function harkUtils(stream, options) {
+    return hark(stream, options);
+}
+exports.bufferizeCandidates = bufferizeCandidates;
+exports.WebRtcPeerRecvonly = WebRtcPeerRecvonly;
+exports.WebRtcPeerSendonly = WebRtcPeerSendonly;
+exports.WebRtcPeerSendrecv = WebRtcPeerSendrecv;
+exports.hark = harkUtils;
+
+
+/***/ }),
+
+/***/ 1056:
+/***/ (function(module, exports, __webpack_require__) {
+
+/*
+ * (C) Copyright 2014 Kurento (http://kurento.org/)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+/**
+ * This module contains a set of reusable components that have been found useful
+ * during the development of the WebRTC applications with Kurento.
+ *
+ * @module kurentoUtils
+ *
+ * @copyright 2014 Kurento (http://kurento.org/)
+ * @license ALv2
+ */
+var WebRtcPeer = __webpack_require__(1055);
+exports.WebRtcPeer = WebRtcPeer;
+
+
+/***/ }),
+
+/***/ 1057:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", { value: true });
+/*
+ * (C) Copyright 2017 OpenVidu (http://openvidu.io/)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+var OpenViduInternal_1 = __webpack_require__(1059);
+var Session_1 = __webpack_require__(525);
+var Publisher_1 = __webpack_require__(524);
+var adapter = __webpack_require__(528);
 if (window) {
     window["adapter"] = adapter;
 }
-var OpenVidu = (function () {
+var OpenVidu = /** @class */ (function () {
     function OpenVidu() {
         this.openVidu = new OpenViduInternal_1.OpenViduInternal();
+        console.info("'OpenVidu' initialized");
     }
     ;
     OpenVidu.prototype.initSession = function (param1, param2) {
@@ -69,7 +1229,9 @@ var OpenVidu = (function () {
                     }
                 };
             }
-            return new Publisher_1.Publisher(this.openVidu.initPublisherTagged(parentId, cameraOptions, callback), parentId);
+            var publisher = new Publisher_1.Publisher(this.openVidu.initPublisherTagged(parentId, cameraOptions, callback), parentId);
+            console.info("'Publisher' initialized");
+            return publisher;
         }
         else {
             alert("Browser not supported");
@@ -93,9 +1255,15 @@ var OpenVidu = (function () {
         navigator.mediaDevices.enumerateDevices().then(function (deviceInfos) {
             callback(null, deviceInfos);
         }).catch(function (error) {
-            console.log("Error getting devices: " + error);
+            console.error("Error getting devices", error);
             callback(error, null);
         });
+    };
+    OpenVidu.prototype.enableProdMode = function () {
+        console.log = function () { };
+        console.debug = function () { };
+        console.info = function () { };
+        console.warn = function () { };
     };
     return OpenVidu;
 }());
@@ -104,7 +1272,7 @@ exports.OpenVidu = OpenVidu;
 
 /***/ }),
 
-/***/ 1120:
+/***/ 1058:
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -113,24 +1281,24 @@ function __export(m) {
     for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
 }
 Object.defineProperty(exports, "__esModule", { value: true });
-__export(__webpack_require__(1119));
-__export(__webpack_require__(555));
-__export(__webpack_require__(554));
-__export(__webpack_require__(556));
-__export(__webpack_require__(325));
-__export(__webpack_require__(557));
+__export(__webpack_require__(1057));
+__export(__webpack_require__(525));
+__export(__webpack_require__(524));
+__export(__webpack_require__(526));
+__export(__webpack_require__(307));
+__export(__webpack_require__(527));
 
 
 /***/ }),
 
-/***/ 1121:
+/***/ 1059:
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
 /*
- * (C) Copyright 2016 OpenVidu (http://kurento.org/)
+ * (C) Copyright 2017 OpenVidu (http://openvidu.io/)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,28 +1313,27 @@ Object.defineProperty(exports, "__esModule", { value: true });
  * limitations under the License.
  *
  */
-var SessionInternal_1 = __webpack_require__(1122);
-var Stream_1 = __webpack_require__(325);
-var RpcBuilder = __webpack_require__(500);
-var OpenViduInternal = (function () {
+var SessionInternal_1 = __webpack_require__(1060);
+var Stream_1 = __webpack_require__(307);
+var RpcBuilder = __webpack_require__(523);
+var OpenViduInternal = /** @class */ (function () {
     function OpenViduInternal() {
         this.remoteStreams = [];
     }
     ;
     /* NEW METHODS */
     OpenViduInternal.prototype.initSession = function (sessionId) {
-        console.log("Session initialized!");
+        console.info("'Session' initialized with 'sessionId' [" + sessionId + "]");
         this.session = new SessionInternal_1.SessionInternal(this, sessionId);
         return this.session;
     };
     OpenViduInternal.prototype.initPublisherTagged = function (parentId, cameraOptions, callback) {
         var _this = this;
-        console.log("Publisher tagged initialized!");
         this.getCamera(cameraOptions);
         if (callback == null) {
             this.camera.requestCameraAccess(function (error, camera) {
                 if (error) {
-                    console.log("Error accessing the camera");
+                    console.error("Error accessing the camera", error);
                 }
                 else {
                     _this.camera.setVideoElement(_this.cameraReady(camera, parentId));
@@ -194,7 +1361,6 @@ var OpenViduInternal = (function () {
         return videoElement;
     };
     OpenViduInternal.prototype.initPublisher = function (cameraOptions, callback) {
-        console.log("Publisher initialized!");
         this.getCamera(cameraOptions);
         this.camera.requestCameraAccess(function (error, camera) {
             if (error)
@@ -283,7 +1449,7 @@ var OpenViduInternal = (function () {
         }
     };
     OpenViduInternal.prototype.disconnectCallback = function () {
-        console.log('Websocket connection lost');
+        console.warn('Websocket connection lost');
         if (this.isRoomAvailable()) {
             this.session.onLostConnection();
         }
@@ -292,7 +1458,7 @@ var OpenViduInternal = (function () {
         }
     };
     OpenViduInternal.prototype.reconnectingCallback = function () {
-        console.log('Websocket connection lost (reconnecting)');
+        console.warn('Websocket connection lost (reconnecting)');
         if (this.isRoomAvailable()) {
             this.session.onLostConnection();
         }
@@ -301,7 +1467,7 @@ var OpenViduInternal = (function () {
         }
     };
     OpenViduInternal.prototype.reconnectedCallback = function () {
-        console.log('Websocket reconnected');
+        console.warn('Websocket reconnected');
     };
     OpenViduInternal.prototype.onParticipantJoined = function (params) {
         if (this.isRoomAvailable()) {
@@ -356,11 +1522,11 @@ var OpenViduInternal = (function () {
             for (var index in this.rpcParams) {
                 if (this.rpcParams.hasOwnProperty(index)) {
                     params[index] = this.rpcParams[index];
-                    console.log('RPC param added to request {' + index + ': ' + this.rpcParams[index] + '}');
+                    console.debug('RPC param added to request {' + index + ': ' + this.rpcParams[index] + '}');
                 }
             }
         }
-        console.log('Sending request: { method:"' + method + '", params: ' + JSON.stringify(params) + ' }');
+        console.debug('Sending request: {method:"' + method + '", params: ' + JSON.stringify(params) + '}');
         this.jsonRpcClient.send(method, params, callback);
     };
     OpenViduInternal.prototype.close = function (forced) {
@@ -470,16 +1636,16 @@ exports.OpenViduInternal = OpenViduInternal;
 
 /***/ }),
 
-/***/ 1122:
+/***/ 1060:
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
-var Connection_1 = __webpack_require__(557);
-var EventEmitter = __webpack_require__(147);
+var Connection_1 = __webpack_require__(527);
+var EventEmitter = __webpack_require__(135);
 var SECRET_PARAM = '?secret=';
-var SessionInternal = (function () {
+var SessionInternal = /** @class */ (function () {
     function SessionInternal(openVidu, sessionId) {
         this.openVidu = openVidu;
         this.ee = new EventEmitter();
@@ -652,12 +1818,12 @@ var SessionInternal = (function () {
         stream.subscribe();
     };
     SessionInternal.prototype.unsuscribe = function (stream) {
-        console.log("Unsubscribing from " + stream.getId());
+        console.info("Unsubscribing from " + stream.getId());
         this.openVidu.sendRequest('unsubscribeFromVideo', {
             sender: stream.getId()
         }, function (error, response) {
             if (error) {
-                console.error(error);
+                console.error("Error unsubscribing from Subscriber", error);
             }
             else {
                 console.info("Unsubscribed correctly from " + stream.getId());
@@ -666,15 +1832,25 @@ var SessionInternal = (function () {
     };
     SessionInternal.prototype.onParticipantPublished = function (options) {
         options.metadata = this.participants[options.id].data;
-        var connection = new Connection_1.Connection(this.openVidu, false, this, options);
-        var pid = connection.connectionId;
-        if (!(pid in this.participants)) {
-            console.info("Publisher not found in participants list by its id", pid);
+        // Get the existing Connection created on 'onParticipantJoined' for
+        // existing participants or create a new one for new participants
+        var connection = this.participants[options.id];
+        if (connection) {
+            // Update existing Connection
+            connection.options = options;
+            connection.initStreams(options);
         }
         else {
-            console.log("Publisher found in participants list by its id", pid);
+            // Create new Connection
+            connection = new Connection_1.Connection(this.openVidu, false, this, options);
         }
-        //replacing old connection (this one has streams)
+        var pid = connection.connectionId;
+        if (!(pid in this.participants)) {
+            console.debug("Remote Connection not found in connections list by its id [" + pid + "]");
+        }
+        else {
+            console.debug("Remote Connection found in connections list by its id [" + pid + "]");
+        }
         connection.creationTime = this.participants[pid].creationTime;
         this.participants[pid] = connection;
         this.ee.emitEvent('participant-published', [{ connection: connection }]);
@@ -694,13 +1870,12 @@ var SessionInternal = (function () {
         connection.creationTime = new Date().getTime();
         var pid = connection.connectionId;
         if (!(pid in this.participants)) {
-            console.log("New participant to participants list with id", pid);
             this.participants[pid] = connection;
         }
         else {
             //use existing so that we don't lose streams info
-            console.info("Participant already exists in participants list with " +
-                "the same id, old:", this.participants[pid], ", joined now:", connection);
+            console.warn("Connection already exists in connections list with " +
+                "the same connectionId, old:", this.participants[pid], ", joined now:", connection);
             connection = this.participants[pid];
         }
         this.ee.emitEvent('participant-joined', [{
@@ -750,7 +1925,7 @@ var SessionInternal = (function () {
     };
     ;
     SessionInternal.prototype.onNewMessage = function (msg) {
-        console.log("New message: " + JSON.stringify(msg));
+        console.info("New message: " + JSON.stringify(msg));
         var room = msg.room;
         var user = msg.user;
         var message = msg.message;
@@ -793,7 +1968,7 @@ var SessionInternal = (function () {
         }
     };
     SessionInternal.prototype.onRoomClosed = function (msg) {
-        console.log("Room closed: " + JSON.stringify(msg));
+        console.info("Room closed: " + JSON.stringify(msg));
         var room = msg.room;
         if (room !== undefined) {
             this.ee.emitEvent('room-closed', [{
@@ -813,7 +1988,7 @@ var SessionInternal = (function () {
             ;
             return;
         }
-        console.log('Lost connection in room ' + this.id);
+        console.warn('Lost connection in Session ' + this.id);
         var room = this.id;
         if (room !== undefined) {
             this.ee.emitEvent('lost-connection', [{ room: room }]);
@@ -839,7 +2014,7 @@ var SessionInternal = (function () {
      */
     SessionInternal.prototype.leave = function (forced, jsonRpcClient) {
         forced = !!forced;
-        console.log("Leaving room (forced=" + forced + ")");
+        console.info("Leaving Session (forced=" + forced + ")");
         if (this.connected && !forced) {
             this.openVidu.sendRequest('leaveRoom', function (error, response) {
                 if (error) {
@@ -868,7 +2043,7 @@ var SessionInternal = (function () {
         delete this.participants[connection.connectionId];
         connection.dispose();
         if (connection === this.localParticipant) {
-            console.log("Unpublishing my media (I'm " + connection.connectionId + ")");
+            console.info("Unpublishing my media (I'm " + connection.connectionId + ")");
             delete this.localParticipant;
             this.openVidu.sendRequest('unpublishVideo', function (error, response) {
                 if (error) {
@@ -892,7 +2067,7 @@ var SessionInternal = (function () {
         if (connection === this.localParticipant) {
             delete this.participants[connection.connectionId];
             connection.dispose();
-            console.log("Unpublishing my media (I'm " + connection.connectionId + ")");
+            console.info("Unpublishing my media (I'm " + connection.connectionId + ")");
             delete this.localParticipant;
             this.openVidu.sendRequest('unpublishVideo', function (error, response) {
                 if (error) {
@@ -940,24 +2115,24 @@ exports.SessionInternal = SessionInternal;
 
 /***/ }),
 
-/***/ 1138:
+/***/ 1077:
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(563);
+module.exports = __webpack_require__(530);
 
 
 /***/ }),
 
-/***/ 291:
+/***/ 277:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_http__ = __webpack_require__(80);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_http__ = __webpack_require__(73);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_rxjs_Observable__ = __webpack_require__(1);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_rxjs_Observable___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2_rxjs_Observable__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__authentication_service__ = __webpack_require__(47);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_rxjs_Rx__ = __webpack_require__(502);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__authentication_service__ = __webpack_require__(42);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_rxjs_Rx__ = __webpack_require__(483);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_rxjs_Rx___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_4_rxjs_Rx__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return LessonService; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -1066,15 +2241,15 @@ var LessonService = (function () {
 
 /***/ }),
 
-/***/ 292:
+/***/ 278:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_http__ = __webpack_require__(80);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_http__ = __webpack_require__(73);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_rxjs_Observable__ = __webpack_require__(1);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_rxjs_Observable___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2_rxjs_Observable__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__authentication_service__ = __webpack_require__(47);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__authentication_service__ = __webpack_require__(42);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return VideoSessionService; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -1137,15 +2312,15 @@ var VideoSessionService = (function () {
 
 /***/ }),
 
-/***/ 325:
+/***/ 307:
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
-var EventEmitter = __webpack_require__(147);
-var kurentoUtils = __webpack_require__(816);
-var adapter = __webpack_require__(561);
+var EventEmitter = __webpack_require__(135);
+var kurentoUtils = __webpack_require__(1056);
+var adapter = __webpack_require__(528);
 if (window) {
     window["adapter"] = adapter;
 }
@@ -1158,7 +2333,7 @@ function show(id) {
 function hide(id) {
     document.getElementById(jq(id)).style.display = 'none';
 }
-var Stream = (function () {
+var Stream = /** @class */ (function () {
     function Stream(openVidu, local, room, options) {
         var _this = this;
         this.openVidu = openVidu;
@@ -1191,22 +2366,22 @@ var Stream = (function () {
         this.mediaConstraints = options.mediaConstraints;
         this.audioOnly = options.audioOnly || false;
         this.addEventListener('src-added', function (srcEvent) {
-            _this.videoSrc = srcEvent.src;
+            _this.videoSrcObject = srcEvent.srcObject;
             if (_this.video)
-                _this.video.src = srcEvent.src;
-            console.warn("Videosrc [" + srcEvent.src + "] added to stream [" + _this.getId() + "]");
+                _this.video.srcObject = srcEvent.srcObject;
+            console.debug("Video srcObject [" + srcEvent.srcObject + "] added to stream [" + _this.getId() + "]");
         });
     }
     Stream.prototype.emitSrcEvent = function (wrstream) {
         this.ee.emitEvent('src-added', [{
-                src: URL.createObjectURL(wrstream)
+                srcObject: wrstream
             }]);
     };
     Stream.prototype.emitStreamReadyEvent = function () {
         this.ee.emitEvent('stream-ready'), [{}];
     };
-    Stream.prototype.getVideoSrc = function () {
-        return this.videoSrc;
+    Stream.prototype.getVideoSrcObject = function () {
+        return this.videoSrcObject;
     };
     Stream.prototype.removeVideo = function (parentElement) {
         if (typeof parentElement === "string") {
@@ -1260,11 +2435,11 @@ var Stream = (function () {
         return this.dataChannelOpened;
     };
     Stream.prototype.onDataChannelOpen = function (event) {
-        console.log('Data channel is opened');
+        console.debug('Data channel is opened');
         this.dataChannelOpened = true;
     };
     Stream.prototype.onDataChannelClosed = function (event) {
-        console.log('Data channel is closed');
+        console.debug('Data channel is closed');
         this.dataChannelOpened = false;
     };
     Stream.prototype.sendData = function (data) {
@@ -1274,7 +2449,7 @@ var Stream = (function () {
         if (!this.dataChannelOpened) {
             throw new Error('Data channel is not opened');
         }
-        console.log("Sending through data channel: " + data);
+        console.info("Sending through data channel: " + data);
         this.wp.send(data);
     };
     Stream.prototype.getWrStream = function () {
@@ -1307,17 +2482,21 @@ var Stream = (function () {
     };
     Stream.prototype.playOnlyVideo = function (parentElement, thumbnailId) {
         // TO-DO: check somehow if the stream is audio only, so the element created is <audio> instead of <video>
+        var _this = this;
         this.video = document.createElement('video');
-        this.video.id = 'native-video-' + this.getId();
+        this.video.id = (this.local ? 'local-' : 'remote-') + 'video-' + this.getId();
         this.video.autoplay = true;
         this.video.controls = false;
-        this.video.src = this.videoSrc;
+        this.video.srcObject = this.videoSrcObject;
         this.videoElements.push({
             thumb: thumbnailId,
             video: this.video
         });
         if (this.local) {
             this.video.muted = true;
+            this.video.onplay = function () {
+                console.info("Local 'Stream' with id [" + _this.getId() + "] video is now playing");
+            };
         }
         else {
             this.video.title = this.getId();
@@ -1370,12 +2549,7 @@ var Stream = (function () {
         return this.connection;
     };
     Stream.prototype.getId = function () {
-        if (this.connection) {
-            return this.connection.connectionId + "_" + this.id;
-        }
-        else {
-            return this.id + "_webcam";
-        }
+        return this.connection.connectionId + "_" + this.id;
     };
     Stream.prototype.getRTCPeerConnection = function () {
         return this.getWebRtcPeer().peerConnection;
@@ -1459,7 +2633,7 @@ var Stream = (function () {
             return console.error("(publish) SDP offer error: "
                 + JSON.stringify(error));
         }
-        console.log("Sending SDP offer to publish as "
+        console.debug("Sending SDP offer to publish as "
             + this.getId(), sdpOfferParam);
         this.openVidu.sendRequest("publishVideo", {
             sdpOffer: sdpOfferParam,
@@ -1470,10 +2644,8 @@ var Stream = (function () {
                 console.error("Error on publishVideo: " + JSON.stringify(error));
             }
             else {
-                _this.room.emitEvent('stream-published', [{
-                        stream: _this
-                    }]);
                 _this.processSdpAnswer(response.sdpAnswer);
+                console.info("'Publisher' succesfully published to session");
             }
         });
     };
@@ -1483,7 +2655,7 @@ var Stream = (function () {
             return console.error("(subscribe) SDP offer error: "
                 + JSON.stringify(error));
         }
-        console.log("Sending SDP offer to subscribe to "
+        console.debug("Sending SDP offer to subscribe to "
             + this.getId(), sdpOfferParam);
         this.openVidu.sendRequest("receiveVideoFrom", {
             sender: this.getId(),
@@ -1518,7 +2690,7 @@ var Stream = (function () {
                 options.dataChannels = true;
             }
             if (this.displayMyRemote()) {
-                this.wp = new kurentoUtils.WebRtcPeer.WebRtcPeerSendrecv(options, function (error) {
+                this.wp = kurentoUtils.WebRtcPeer.WebRtcPeerSendrecv(options, function (error) {
                     if (error) {
                         return console.error(error);
                     }
@@ -1526,7 +2698,7 @@ var Stream = (function () {
                 });
             }
             else {
-                this.wp = new kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options, function (error) {
+                this.wp = kurentoUtils.WebRtcPeer.WebRtcPeerSendonly(options, function (error) {
                     if (error) {
                         return console.error(error);
                     }
@@ -1539,20 +2711,20 @@ var Stream = (function () {
                 audio: this.recvAudio,
                 video: !this.audioOnly
             };
-            console.log("Constraints of generate SDP offer (subscribing)", offerConstraints);
+            console.debug("'Session.subscribe(Stream)' called. Constraints of generate SDP offer", offerConstraints);
             var options = {
                 onicecandidate: this.connection.sendIceCandidate.bind(this.connection),
                 mediaConstraints: offerConstraints
             };
-            this.wp = new kurentoUtils.WebRtcPeer.WebRtcPeerRecvonly(options, function (error) {
+            this.wp = kurentoUtils.WebRtcPeer.WebRtcPeerRecvonly(options, function (error) {
                 if (error) {
                     return console.error(error);
                 }
                 _this.wp.generateOffer(sdpOfferCallback.bind(_this));
             });
         }
-        console.log("Waiting for SDP offer to be generated ("
-            + (this.local ? "local" : "remote") + " peer: " + this.getId() + ")");
+        console.debug("Waiting for SDP offer to be generated ("
+            + (this.local ? "local" : "remote") + " 'Stream': " + this.getId() + ")");
     };
     Stream.prototype.publish = function () {
         var _this = this;
@@ -1581,7 +2753,7 @@ var Stream = (function () {
             type: 'answer',
             sdp: sdpAnswer,
         });
-        console.log(this.getId() + ": set peer connection with recvd SDP answer", sdpAnswer);
+        console.debug(this.getId() + ": set peer connection with recvd SDP answer", sdpAnswer);
         var participantId = this.getId();
         var pc = this.wp.peerConnection;
         pc.setRemoteDescription(answer, function () {
@@ -1589,7 +2761,7 @@ var Stream = (function () {
             // except when showMyRemote is true
             if (!_this.local || _this.displayMyRemote()) {
                 _this.wrStream = pc.getRemoteStreams()[0];
-                console.log("Peer remote stream", _this.wrStream);
+                console.debug("Peer remote stream", _this.wrStream);
                 if (_this.wrStream != undefined) {
                     _this.emitSrcEvent(_this.wrStream);
                     _this.speechEvent = kurentoUtils.WebRtcPeer.hark(_this.wrStream, { threshold: _this.room.thresholdSpeaker });
@@ -1610,9 +2782,14 @@ var Stream = (function () {
                     var videoElement = _a[_i];
                     var thumbnailId = videoElement.thumb;
                     var video = videoElement.video;
-                    video.src = URL.createObjectURL(_this.wrStream);
+                    video.srcObject = _this.wrStream;
                     video.onplay = function () {
-                        console.log(_this.getId() + ': ' + 'Video playing');
+                        console.info("Remote 'Stream' with id [" + _this.getId() + "] video is now playing");
+                        if (_this.local && _this.displayMyRemote()) {
+                            _this.ee.emitEvent('remote-video-is-playing', [{
+                                    element: _this.video
+                                }]);
+                        }
                         //show(thumbnailId);
                         //this.hideSpinner(this.getId());
                     };
@@ -1643,7 +2820,7 @@ var Stream = (function () {
         if (this.speechEvent) {
             this.speechEvent.stop();
         }
-        console.log(this.getId() + ": Stream '" + this.id + "' unpublished");
+        console.info(this.getId() + ": Stream '" + this.id + "' unpublished");
     };
     Stream.prototype.dispose = function () {
         function disposeElement(element) {
@@ -1670,7 +2847,7 @@ var Stream = (function () {
         if (this.speechEvent) {
             this.speechEvent.stop();
         }
-        console.log(this.getId() + ": Stream '" + this.id + "' disposed");
+        console.info((this.local ? "Local " : "Remote ") + "'Stream' with id [" + this.getId() + "]' has been succesfully disposed");
     };
     return Stream;
 }());
@@ -1679,16 +2856,16 @@ exports.Stream = Stream;
 
 /***/ }),
 
-/***/ 47:
+/***/ 42:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_rxjs_Rx__ = __webpack_require__(502);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_rxjs_Rx__ = __webpack_require__(483);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_rxjs_Rx___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_0_rxjs_Rx__);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__angular_http__ = __webpack_require__(80);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__angular_router__ = __webpack_require__(84);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_rxjs_add_operator_map__ = __webpack_require__(38);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__angular_http__ = __webpack_require__(73);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__angular_router__ = __webpack_require__(77);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_rxjs_add_operator_map__ = __webpack_require__(32);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_4_rxjs_add_operator_map___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_4_rxjs_add_operator_map__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return AuthenticationService; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
@@ -1815,13 +2992,13 @@ function utf8_to_b64(str) {
 
 /***/ }),
 
-/***/ 477:
+/***/ 459:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_router__ = __webpack_require__(84);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__ = __webpack_require__(47);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_router__ = __webpack_require__(77);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__ = __webpack_require__(42);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return AuthGuard; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -1860,18 +3037,18 @@ var AuthGuard = (function () {
 
 /***/ }),
 
-/***/ 478:
+/***/ 460:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_router__ = __webpack_require__(84);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__angular_material__ = __webpack_require__(272);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__models_lesson__ = __webpack_require__(484);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__services_lesson_service__ = __webpack_require__(291);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__services_video_session_service__ = __webpack_require__(292);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6__services_authentication_service__ = __webpack_require__(47);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_7__join_session_dialog_component__ = __webpack_require__(479);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_router__ = __webpack_require__(77);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__angular_material__ = __webpack_require__(258);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__models_lesson__ = __webpack_require__(466);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__services_lesson_service__ = __webpack_require__(277);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__services_video_session_service__ = __webpack_require__(278);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6__services_authentication_service__ = __webpack_require__(42);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_7__join_session_dialog_component__ = __webpack_require__(461);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return DashboardComponent; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -1967,8 +3144,8 @@ var DashboardComponent = (function () {
     DashboardComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-dashboard',
-            template: __webpack_require__(822),
-            styles: [__webpack_require__(796)],
+            template: __webpack_require__(778),
+            styles: [__webpack_require__(762)],
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_4__services_lesson_service__["a" /* LessonService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_4__services_lesson_service__["a" /* LessonService */]) === 'function' && _a) || Object, (typeof (_b = typeof __WEBPACK_IMPORTED_MODULE_5__services_video_session_service__["a" /* VideoSessionService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_5__services_video_session_service__["a" /* VideoSessionService */]) === 'function' && _b) || Object, (typeof (_c = typeof __WEBPACK_IMPORTED_MODULE_6__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_6__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _c) || Object, (typeof (_d = typeof __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */]) === 'function' && _d) || Object, (typeof (_e = typeof __WEBPACK_IMPORTED_MODULE_2__angular_material__["b" /* MdSnackBar */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_2__angular_material__["b" /* MdSnackBar */]) === 'function' && _e) || Object, (typeof (_f = typeof __WEBPACK_IMPORTED_MODULE_2__angular_material__["c" /* MdDialog */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_2__angular_material__["c" /* MdDialog */]) === 'function' && _f) || Object])
     ], DashboardComponent);
@@ -1979,7 +3156,7 @@ var DashboardComponent = (function () {
 
 /***/ }),
 
-/***/ 479:
+/***/ 461:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -2054,18 +3231,18 @@ var JoinSessionDialogComponent = (function () {
 
 /***/ }),
 
-/***/ 480:
+/***/ 462:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_router__ = __webpack_require__(84);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__angular_common__ = __webpack_require__(14);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__angular_material__ = __webpack_require__(272);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__models_lesson__ = __webpack_require__(484);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__models_user__ = __webpack_require__(738);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6__services_lesson_service__ = __webpack_require__(291);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_7__services_authentication_service__ = __webpack_require__(47);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_router__ = __webpack_require__(77);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__angular_common__ = __webpack_require__(11);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__angular_material__ = __webpack_require__(258);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__models_lesson__ = __webpack_require__(466);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__models_user__ = __webpack_require__(705);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6__services_lesson_service__ = __webpack_require__(277);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_7__services_authentication_service__ = __webpack_require__(42);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return LessonDetailsComponent; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -2240,8 +3417,8 @@ var LessonDetailsComponent = (function () {
     LessonDetailsComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-lesson-details',
-            template: __webpack_require__(824),
-            styles: [__webpack_require__(798)],
+            template: __webpack_require__(780),
+            styles: [__webpack_require__(764)],
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_6__services_lesson_service__["a" /* LessonService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_6__services_lesson_service__["a" /* LessonService */]) === 'function' && _a) || Object, (typeof (_b = typeof __WEBPACK_IMPORTED_MODULE_7__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_7__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _b) || Object, (typeof (_c = typeof __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */]) === 'function' && _c) || Object, (typeof (_d = typeof __WEBPACK_IMPORTED_MODULE_1__angular_router__["c" /* ActivatedRoute */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_router__["c" /* ActivatedRoute */]) === 'function' && _d) || Object, (typeof (_e = typeof __WEBPACK_IMPORTED_MODULE_2__angular_common__["a" /* Location */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_2__angular_common__["a" /* Location */]) === 'function' && _e) || Object, (typeof (_f = typeof __WEBPACK_IMPORTED_MODULE_3__angular_material__["b" /* MdSnackBar */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_3__angular_material__["b" /* MdSnackBar */]) === 'function' && _f) || Object])
     ], LessonDetailsComponent);
@@ -2252,14 +3429,14 @@ var LessonDetailsComponent = (function () {
 
 /***/ }),
 
-/***/ 481:
+/***/ 463:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_router__ = __webpack_require__(84);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__ = __webpack_require__(47);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__services_user_service__ = __webpack_require__(485);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_router__ = __webpack_require__(77);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__ = __webpack_require__(42);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__services_user_service__ = __webpack_require__(467);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return PresentationComponent; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -2365,8 +3542,8 @@ var PresentationComponent = (function () {
     PresentationComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-presentation',
-            template: __webpack_require__(825),
-            styles: [__webpack_require__(799)]
+            template: __webpack_require__(781),
+            styles: [__webpack_require__(765)]
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _a) || Object, (typeof (_b = typeof __WEBPACK_IMPORTED_MODULE_3__services_user_service__["a" /* UserService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_3__services_user_service__["a" /* UserService */]) === 'function' && _b) || Object, (typeof (_c = typeof __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */]) === 'function' && _c) || Object])
     ], PresentationComponent);
@@ -2377,12 +3554,12 @@ var PresentationComponent = (function () {
 
 /***/ }),
 
-/***/ 482:
+/***/ 464:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__services_authentication_service__ = __webpack_require__(47);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__services_authentication_service__ = __webpack_require__(42);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return ProfileComponent; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -2405,8 +3582,8 @@ var ProfileComponent = (function () {
     ProfileComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-profile',
-            template: __webpack_require__(826),
-            styles: [__webpack_require__(800)]
+            template: __webpack_require__(782),
+            styles: [__webpack_require__(766)]
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_1__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _a) || Object])
     ], ProfileComponent);
@@ -2417,16 +3594,16 @@ var ProfileComponent = (function () {
 
 /***/ }),
 
-/***/ 483:
+/***/ 465:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_common__ = __webpack_require__(14);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_openvidu_browser__ = __webpack_require__(1120);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_common__ = __webpack_require__(11);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_openvidu_browser__ = __webpack_require__(1058);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_openvidu_browser___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2_openvidu_browser__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__services_video_session_service__ = __webpack_require__(292);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__services_authentication_service__ = __webpack_require__(47);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__services_video_session_service__ = __webpack_require__(278);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__services_authentication_service__ = __webpack_require__(42);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return VideoSessionComponent; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -2640,8 +3817,8 @@ var VideoSessionComponent = (function () {
     VideoSessionComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-video-session',
-            template: __webpack_require__(827),
-            styles: [__webpack_require__(801)]
+            template: __webpack_require__(783),
+            styles: [__webpack_require__(767)]
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_1__angular_common__["a" /* Location */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_common__["a" /* Location */]) === 'function' && _a) || Object, (typeof (_b = typeof __WEBPACK_IMPORTED_MODULE_4__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_4__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _b) || Object, (typeof (_c = typeof __WEBPACK_IMPORTED_MODULE_3__services_video_session_service__["a" /* VideoSessionService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_3__services_video_session_service__["a" /* VideoSessionService */]) === 'function' && _c) || Object])
     ], VideoSessionComponent);
@@ -2652,7 +3829,7 @@ var VideoSessionComponent = (function () {
 
 /***/ }),
 
-/***/ 484:
+/***/ 466:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -2668,12 +3845,12 @@ var Lesson = (function () {
 
 /***/ }),
 
-/***/ 485:
+/***/ 467:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_http__ = __webpack_require__(80);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_http__ = __webpack_require__(73);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_rxjs_Observable__ = __webpack_require__(1);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2_rxjs_Observable___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2_rxjs_Observable__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return UserService; });
@@ -2720,14 +3897,850 @@ var UserService = (function () {
 
 /***/ }),
 
-/***/ 554:
+/***/ 522:
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+/* WEBPACK VAR INJECTION */(function(global) {/*
+ * (C) Copyright 2013-2015 Kurento (http://kurento.org/)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+var BrowserWebSocket = global.WebSocket || global.MozWebSocket;
+var Logger = console;
+/**
+ * Get either the `WebSocket` or `MozWebSocket` globals
+ * in the browser or try to resolve WebSocket-compatible
+ * interface exposed by `ws` for Node-like environment.
+ */
+/*var WebSocket = BrowserWebSocket;
+if (!WebSocket && typeof window === 'undefined') {
+    try {
+        WebSocket = require('ws');
+    } catch (e) { }
+}*/
+//var SockJS = require('sockjs-client');
+var MAX_RETRIES = 2000; // Forever...
+var RETRY_TIME_MS = 3000; // FIXME: Implement exponential wait times...
+var CONNECTING = 0;
+var OPEN = 1;
+var CLOSING = 2;
+var CLOSED = 3;
+/*
+config = {
+        uri : wsUri,
+        useSockJS : true (use SockJS) / false (use WebSocket) by default,
+        onconnected : callback method to invoke when connection is successful,
+        ondisconnect : callback method to invoke when the connection is lost,
+        onreconnecting : callback method to invoke when the client is reconnecting,
+        onreconnected : callback method to invoke when the client succesfully reconnects,
+    };
+*/
+function WebSocketWithReconnection(config) {
+    var closing = false;
+    var registerMessageHandler;
+    var wsUri = config.uri;
+    var useSockJS = config.useSockJS;
+    var reconnecting = false;
+    var forcingDisconnection = false;
+    var ws;
+    if (useSockJS) {
+        ws = new SockJS(wsUri);
+    }
+    else {
+        ws = new WebSocket(wsUri);
+    }
+    ws.onopen = function () {
+        logConnected(ws, wsUri);
+        if (config.onconnected) {
+            config.onconnected();
+        }
+    };
+    ws.onerror = function (error) {
+        Logger.error("Could not connect to " + wsUri + " (invoking onerror if defined)", error);
+        if (config.onerror) {
+            config.onerror(error);
+        }
+    };
+    function logConnected(ws, wsUri) {
+        try {
+            Logger.debug("WebSocket connected to " + wsUri);
+        }
+        catch (e) {
+            Logger.error(e);
+        }
+    }
+    var reconnectionOnClose = function () {
+        if (ws.readyState === CLOSED) {
+            if (closing) {
+                Logger.debug("Connection closed by user");
+            }
+            else {
+                Logger.debug("Connection closed unexpectecly. Reconnecting...");
+                reconnectToSameUri(MAX_RETRIES, 1);
+            }
+        }
+        else {
+            Logger.debug("Close callback from previous websocket. Ignoring it");
+        }
+    };
+    ws.onclose = reconnectionOnClose;
+    function reconnectToSameUri(maxRetries, numRetries) {
+        Logger.debug("reconnectToSameUri (attempt #" + numRetries + ", max=" + maxRetries + ")");
+        if (numRetries === 1) {
+            if (reconnecting) {
+                Logger.warn("Trying to reconnectToNewUri when reconnecting... Ignoring this reconnection.");
+                return;
+            }
+            else {
+                reconnecting = true;
+            }
+            if (config.onreconnecting) {
+                config.onreconnecting();
+            }
+        }
+        if (forcingDisconnection) {
+            reconnectToNewUri(maxRetries, numRetries, wsUri);
+        }
+        else {
+            if (config.newWsUriOnReconnection) {
+                config.newWsUriOnReconnection(function (error, newWsUri) {
+                    if (error) {
+                        Logger.debug(error);
+                        setTimeout(function () {
+                            reconnectToSameUri(maxRetries, numRetries + 1);
+                        }, RETRY_TIME_MS);
+                    }
+                    else {
+                        reconnectToNewUri(maxRetries, numRetries, newWsUri);
+                    }
+                });
+            }
+            else {
+                reconnectToNewUri(maxRetries, numRetries, wsUri);
+            }
+        }
+    }
+    // TODO Test retries. How to force not connection?
+    function reconnectToNewUri(maxRetries, numRetries, reconnectWsUri) {
+        Logger.debug("Reconnection attempt #" + numRetries);
+        ws.close();
+        wsUri = reconnectWsUri || wsUri;
+        var newWs;
+        if (useSockJS) {
+            newWs = new SockJS(wsUri);
+        }
+        else {
+            newWs = new WebSocket(wsUri);
+        }
+        newWs.onopen = function () {
+            Logger.debug("Reconnected after " + numRetries + " attempts...");
+            logConnected(newWs, wsUri);
+            reconnecting = false;
+            registerMessageHandler();
+            if (config.onreconnected()) {
+                config.onreconnected();
+            }
+            newWs.onclose = reconnectionOnClose;
+        };
+        var onErrorOrClose = function (error) {
+            Logger.warn("Reconnection error: ", error);
+            if (numRetries === maxRetries) {
+                if (config.ondisconnect) {
+                    config.ondisconnect();
+                }
+            }
+            else {
+                setTimeout(function () {
+                    reconnectToSameUri(maxRetries, numRetries + 1);
+                }, RETRY_TIME_MS);
+            }
+        };
+        newWs.onerror = onErrorOrClose;
+        ws = newWs;
+    }
+    this.close = function () {
+        closing = true;
+        ws.close();
+    };
+    // This method is only for testing
+    this.forceClose = function (millis) {
+        Logger.debug("Testing: Force WebSocket close");
+        if (millis) {
+            Logger.debug("Testing: Change wsUri for " + millis + " millis to simulate net failure");
+            var goodWsUri = wsUri;
+            wsUri = "wss://21.234.12.34.4:443/";
+            forcingDisconnection = true;
+            setTimeout(function () {
+                Logger.debug("Testing: Recover good wsUri " + goodWsUri);
+                wsUri = goodWsUri;
+                forcingDisconnection = false;
+            }, millis);
+        }
+        ws.close();
+    };
+    this.reconnectWs = function () {
+        Logger.debug("reconnectWs");
+        reconnectToSameUri(MAX_RETRIES, 1, wsUri);
+    };
+    this.send = function (message) {
+        ws.send(message);
+    };
+    this.addEventListener = function (type, callback) {
+        registerMessageHandler = function () {
+            ws.addEventListener(type, callback);
+        };
+        registerMessageHandler();
+    };
+}
+module.exports = WebSocketWithReconnection;
+
+/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(33)))
+
+/***/ }),
+
+/***/ 523:
+/***/ (function(module, exports, __webpack_require__) {
+
+/*
+ * (C) Copyright 2014 Kurento (http://kurento.org/)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+var defineProperty_IE8 = false;
+if (Object.defineProperty) {
+    try {
+        Object.defineProperty({}, "x", {});
+    }
+    catch (e) {
+        defineProperty_IE8 = true;
+    }
+}
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind
+if (!Function.prototype.bind) {
+    Function.prototype.bind = function (oThis) {
+        if (typeof this !== 'function') {
+            // closest thing possible to the ECMAScript 5
+            // internal IsCallable function
+            throw new TypeError('Function.prototype.bind - what is trying to be bound is not callable');
+        }
+        var aArgs = Array.prototype.slice.call(arguments, 1), fToBind = this, fNOP = function () { }, fBound = function () {
+            return fToBind.apply(this instanceof fNOP && oThis
+                ? this
+                : oThis, aArgs.concat(Array.prototype.slice.call(arguments)));
+        };
+        fNOP.prototype = this.prototype;
+        fBound.prototype = new fNOP();
+        return fBound;
+    };
+}
+var EventEmitter = __webpack_require__(480).EventEmitter;
+var inherits = __webpack_require__(481);
+var packers = __webpack_require__(1054);
+var Mapper = __webpack_require__(1048);
+var BASE_TIMEOUT = 5000;
+function unifyResponseMethods(responseMethods) {
+    if (!responseMethods)
+        return {};
+    for (var key in responseMethods) {
+        var value = responseMethods[key];
+        if (typeof value == 'string')
+            responseMethods[key] =
+                {
+                    response: value
+                };
+    }
+    ;
+    return responseMethods;
+}
+;
+function unifyTransport(transport) {
+    if (!transport)
+        return;
+    // Transport as a function
+    if (transport instanceof Function)
+        return { send: transport };
+    // WebSocket & DataChannel
+    if (transport.send instanceof Function)
+        return transport;
+    // Message API (Inter-window & WebWorker)
+    if (transport.postMessage instanceof Function) {
+        transport.send = transport.postMessage;
+        return transport;
+    }
+    // Stream API
+    if (transport.write instanceof Function) {
+        transport.send = transport.write;
+        return transport;
+    }
+    // Transports that only can receive messages, but not send
+    if (transport.onmessage !== undefined)
+        return;
+    if (transport.pause instanceof Function)
+        return;
+    throw new SyntaxError("Transport is not a function nor a valid object");
+}
+;
+/**
+ * Representation of a RPC notification
+ *
+ * @class
+ *
+ * @constructor
+ *
+ * @param {String} method -method of the notification
+ * @param params - parameters of the notification
+ */
+function RpcNotification(method, params) {
+    if (defineProperty_IE8) {
+        this.method = method;
+        this.params = params;
+    }
+    else {
+        Object.defineProperty(this, 'method', { value: method, enumerable: true });
+        Object.defineProperty(this, 'params', { value: params, enumerable: true });
+    }
+}
+;
+/**
+ * @class
+ *
+ * @constructor
+ *
+ * @param {object} packer
+ *
+ * @param {object} [options]
+ *
+ * @param {object} [transport]
+ *
+ * @param {Function} [onRequest]
+ */
+function RpcBuilder(packer, options, transport, onRequest) {
+    var self = this;
+    if (!packer)
+        throw new SyntaxError('Packer is not defined');
+    if (!packer.pack || !packer.unpack)
+        throw new SyntaxError('Packer is invalid');
+    var responseMethods = unifyResponseMethods(packer.responseMethods);
+    if (options instanceof Function) {
+        if (transport != undefined)
+            throw new SyntaxError("There can't be parameters after onRequest");
+        onRequest = options;
+        transport = undefined;
+        options = undefined;
+    }
+    ;
+    if (options && options.send instanceof Function) {
+        if (transport && !(transport instanceof Function))
+            throw new SyntaxError("Only a function can be after transport");
+        onRequest = transport;
+        transport = options;
+        options = undefined;
+    }
+    ;
+    if (transport instanceof Function) {
+        if (onRequest != undefined)
+            throw new SyntaxError("There can't be parameters after onRequest");
+        onRequest = transport;
+        transport = undefined;
+    }
+    ;
+    if (transport && transport.send instanceof Function)
+        if (onRequest && !(onRequest instanceof Function))
+            throw new SyntaxError("Only a function can be after transport");
+    options = options || {};
+    EventEmitter.call(this);
+    if (onRequest)
+        this.on('request', onRequest);
+    if (defineProperty_IE8)
+        this.peerID = options.peerID;
+    else
+        Object.defineProperty(this, 'peerID', { value: options.peerID });
+    var max_retries = options.max_retries || 0;
+    function transportMessage(event) {
+        self.decode(event.data || event);
+    }
+    ;
+    this.getTransport = function () {
+        return transport;
+    };
+    this.setTransport = function (value) {
+        // Remove listener from old transport
+        if (transport) {
+            // W3C transports
+            if (transport.removeEventListener)
+                transport.removeEventListener('message', transportMessage);
+            else if (transport.removeListener)
+                transport.removeListener('data', transportMessage);
+        }
+        ;
+        // Set listener on new transport
+        if (value) {
+            // W3C transports
+            if (value.addEventListener)
+                value.addEventListener('message', transportMessage);
+            else if (value.addListener)
+                value.addListener('data', transportMessage);
+        }
+        ;
+        transport = unifyTransport(value);
+    };
+    if (!defineProperty_IE8)
+        Object.defineProperty(this, 'transport', {
+            get: this.getTransport.bind(this),
+            set: this.setTransport.bind(this)
+        });
+    this.setTransport(transport);
+    var request_timeout = options.request_timeout || BASE_TIMEOUT;
+    var ping_request_timeout = options.ping_request_timeout || request_timeout;
+    var response_timeout = options.response_timeout || BASE_TIMEOUT;
+    var duplicates_timeout = options.duplicates_timeout || BASE_TIMEOUT;
+    var requestID = 0;
+    var requests = new Mapper();
+    var responses = new Mapper();
+    var processedResponses = new Mapper();
+    var message2Key = {};
+    /**
+     * Store the response to prevent to process duplicate request later
+     */
+    function storeResponse(message, id, dest) {
+        var response = {
+            message: message,
+            /** Timeout to auto-clean old responses */
+            timeout: setTimeout(function () {
+                responses.remove(id, dest);
+            }, response_timeout)
+        };
+        responses.set(response, id, dest);
+    }
+    ;
+    /**
+     * Store the response to ignore duplicated messages later
+     */
+    function storeProcessedResponse(ack, from) {
+        var timeout = setTimeout(function () {
+            processedResponses.remove(ack, from);
+        }, duplicates_timeout);
+        processedResponses.set(timeout, ack, from);
+    }
+    ;
+    /**
+     * Representation of a RPC request
+     *
+     * @class
+     * @extends RpcNotification
+     *
+     * @constructor
+     *
+     * @param {String} method -method of the notification
+     * @param params - parameters of the notification
+     * @param {Integer} id - identifier of the request
+     * @param [from] - source of the notification
+     */
+    function RpcRequest(method, params, id, from, transport) {
+        RpcNotification.call(this, method, params);
+        this.getTransport = function () {
+            return transport;
+        };
+        this.setTransport = function (value) {
+            transport = unifyTransport(value);
+        };
+        if (!defineProperty_IE8)
+            Object.defineProperty(this, 'transport', {
+                get: this.getTransport.bind(this),
+                set: this.setTransport.bind(this)
+            });
+        var response = responses.get(id, from);
+        /**
+         * @constant {Boolean} duplicated
+         */
+        if (!(transport || self.getTransport())) {
+            if (defineProperty_IE8)
+                this.duplicated = Boolean(response);
+            else
+                Object.defineProperty(this, 'duplicated', {
+                    value: Boolean(response)
+                });
+        }
+        var responseMethod = responseMethods[method];
+        this.pack = packer.pack.bind(packer, this, id);
+        /**
+         * Generate a response to this request
+         *
+         * @param {Error} [error]
+         * @param {*} [result]
+         *
+         * @returns {string}
+         */
+        this.reply = function (error, result, transport) {
+            // Fix optional parameters
+            if (error instanceof Function || error && error.send instanceof Function) {
+                if (result != undefined)
+                    throw new SyntaxError("There can't be parameters after callback");
+                transport = error;
+                result = null;
+                error = undefined;
+            }
+            else if (result instanceof Function
+                || result && result.send instanceof Function) {
+                if (transport != undefined)
+                    throw new SyntaxError("There can't be parameters after callback");
+                transport = result;
+                result = null;
+            }
+            ;
+            transport = unifyTransport(transport);
+            // Duplicated request, remove old response timeout
+            if (response)
+                clearTimeout(response.timeout);
+            if (from != undefined) {
+                if (error)
+                    error.dest = from;
+                if (result)
+                    result.dest = from;
+            }
+            ;
+            var message;
+            // New request or overriden one, create new response with provided data
+            if (error || result != undefined) {
+                if (self.peerID != undefined) {
+                    if (error)
+                        error.from = self.peerID;
+                    else
+                        result.from = self.peerID;
+                }
+                // Protocol indicates that responses has own request methods
+                if (responseMethod) {
+                    if (responseMethod.error == undefined && error)
+                        message =
+                            {
+                                error: error
+                            };
+                    else {
+                        var method = error
+                            ? responseMethod.error
+                            : responseMethod.response;
+                        message =
+                            {
+                                method: method,
+                                params: error || result
+                            };
+                    }
+                }
+                else
+                    message =
+                        {
+                            error: error,
+                            result: result
+                        };
+                message = packer.pack(message, id);
+            }
+            else if (response)
+                message = response.message;
+            else
+                message = packer.pack({ result: null }, id);
+            // Store the response to prevent to process a duplicated request later
+            storeResponse(message, id, from);
+            // Return the stored response so it can be directly send back
+            transport = transport || this.getTransport() || self.getTransport();
+            if (transport)
+                return transport.send(message);
+            return message;
+        };
+    }
+    ;
+    inherits(RpcRequest, RpcNotification);
+    function cancel(message) {
+        var key = message2Key[message];
+        if (!key)
+            return;
+        delete message2Key[message];
+        var request = requests.pop(key.id, key.dest);
+        if (!request)
+            return;
+        clearTimeout(request.timeout);
+        // Start duplicated responses timeout
+        storeProcessedResponse(key.id, key.dest);
+    }
+    ;
+    /**
+     * Allow to cancel a request and don't wait for a response
+     *
+     * If `message` is not given, cancel all the request
+     */
+    this.cancel = function (message) {
+        if (message)
+            return cancel(message);
+        for (var message in message2Key)
+            cancel(message);
+    };
+    this.close = function () {
+        // Prevent to receive new messages
+        var transport = this.getTransport();
+        if (transport && transport.close)
+            transport.close();
+        // Request & processed responses
+        this.cancel();
+        processedResponses.forEach(clearTimeout);
+        // Responses
+        responses.forEach(function (response) {
+            clearTimeout(response.timeout);
+        });
+    };
+    /**
+     * Generates and encode a JsonRPC 2.0 message
+     *
+     * @param {String} method -method of the notification
+     * @param params - parameters of the notification
+     * @param [dest] - destination of the notification
+     * @param {object} [transport] - transport where to send the message
+     * @param [callback] - function called when a response to this request is
+     *   received. If not defined, a notification will be send instead
+     *
+     * @returns {string} A raw JsonRPC 2.0 request or notification string
+     */
+    this.encode = function (method, params, dest, transport, callback) {
+        // Fix optional parameters
+        if (params instanceof Function) {
+            if (dest != undefined)
+                throw new SyntaxError("There can't be parameters after callback");
+            callback = params;
+            transport = undefined;
+            dest = undefined;
+            params = undefined;
+        }
+        else if (dest instanceof Function) {
+            if (transport != undefined)
+                throw new SyntaxError("There can't be parameters after callback");
+            callback = dest;
+            transport = undefined;
+            dest = undefined;
+        }
+        else if (transport instanceof Function) {
+            if (callback != undefined)
+                throw new SyntaxError("There can't be parameters after callback");
+            callback = transport;
+            transport = undefined;
+        }
+        ;
+        if (self.peerID != undefined) {
+            params = params || {};
+            params.from = self.peerID;
+        }
+        ;
+        if (dest != undefined) {
+            params = params || {};
+            params.dest = dest;
+        }
+        ;
+        // Encode message
+        var message = {
+            method: method,
+            params: params
+        };
+        if (callback) {
+            var id = requestID++;
+            var retried = 0;
+            message = packer.pack(message, id);
+            function dispatchCallback(error, result) {
+                self.cancel(message);
+                callback(error, result);
+            }
+            ;
+            var request = {
+                message: message,
+                callback: dispatchCallback,
+                responseMethods: responseMethods[method] || {}
+            };
+            var encode_transport = unifyTransport(transport);
+            function sendRequest(transport) {
+                var rt = (method === 'ping' ? ping_request_timeout : request_timeout);
+                request.timeout = setTimeout(timeout, rt * Math.pow(2, retried++));
+                message2Key[message] = { id: id, dest: dest };
+                requests.set(request, id, dest);
+                transport = transport || encode_transport || self.getTransport();
+                if (transport)
+                    return transport.send(message);
+                return message;
+            }
+            ;
+            function retry(transport) {
+                transport = unifyTransport(transport);
+                console.warn(retried + ' retry for request message:', message);
+                var timeout = processedResponses.pop(id, dest);
+                clearTimeout(timeout);
+                return sendRequest(transport);
+            }
+            ;
+            function timeout() {
+                if (retried < max_retries)
+                    return retry(transport);
+                var error = new Error('Request has timed out');
+                error.request = message;
+                error.retry = retry;
+                dispatchCallback(error);
+            }
+            ;
+            return sendRequest(transport);
+        }
+        ;
+        // Return the packed message
+        message = packer.pack(message);
+        transport = transport || this.getTransport();
+        if (transport)
+            return transport.send(message);
+        return message;
+    };
+    /**
+     * Decode and process a JsonRPC 2.0 message
+     *
+     * @param {string} message - string with the content of the message
+     *
+     * @returns {RpcNotification|RpcRequest|undefined} - the representation of the
+     *   notification or the request. If a response was processed, it will return
+     *   `undefined` to notify that it was processed
+     *
+     * @throws {TypeError} - Message is not defined
+     */
+    this.decode = function (message, transport) {
+        if (!message)
+            throw new TypeError("Message is not defined");
+        try {
+            message = packer.unpack(message);
+        }
+        catch (e) {
+            // Ignore invalid messages
+            return console.debug(e, message);
+        }
+        ;
+        var id = message.id;
+        var ack = message.ack;
+        var method = message.method;
+        var params = message.params || {};
+        var from = params.from;
+        var dest = params.dest;
+        // Ignore messages send by us
+        if (self.peerID != undefined && from == self.peerID)
+            return;
+        // Notification
+        if (id == undefined && ack == undefined) {
+            var notification = new RpcNotification(method, params);
+            if (self.emit('request', notification))
+                return;
+            return notification;
+        }
+        ;
+        function processRequest() {
+            // If we have a transport and it's a duplicated request, reply inmediatly
+            transport = unifyTransport(transport) || self.getTransport();
+            if (transport) {
+                var response = responses.get(id, from);
+                if (response)
+                    return transport.send(response.message);
+            }
+            ;
+            var idAck = (id != undefined) ? id : ack;
+            var request = new RpcRequest(method, params, idAck, from, transport);
+            if (self.emit('request', request))
+                return;
+            return request;
+        }
+        ;
+        function processResponse(request, error, result) {
+            request.callback(error, result);
+        }
+        ;
+        function duplicatedResponse(timeout) {
+            console.warn("Response already processed", message);
+            // Update duplicated responses timeout
+            clearTimeout(timeout);
+            storeProcessedResponse(ack, from);
+        }
+        ;
+        // Request, or response with own method
+        if (method) {
+            // Check if it's a response with own method
+            if (dest == undefined || dest == self.peerID) {
+                var request = requests.get(ack, from);
+                if (request) {
+                    var responseMethods = request.responseMethods;
+                    if (method == responseMethods.error)
+                        return processResponse(request, params);
+                    if (method == responseMethods.response)
+                        return processResponse(request, null, params);
+                    return processRequest();
+                }
+                var processed = processedResponses.get(ack, from);
+                if (processed)
+                    return duplicatedResponse(processed);
+            }
+            // Request
+            return processRequest();
+        }
+        ;
+        var error = message.error;
+        var result = message.result;
+        // Ignore responses not send to us
+        if (error && error.dest && error.dest != self.peerID)
+            return;
+        if (result && result.dest && result.dest != self.peerID)
+            return;
+        // Response
+        var request = requests.get(ack, from);
+        if (!request) {
+            var processed = processedResponses.get(ack, from);
+            if (processed)
+                return duplicatedResponse(processed);
+            return console.warn("No callback was defined for this message", message);
+        }
+        ;
+        // Process response
+        processResponse(request, error, result);
+    };
+}
+;
+inherits(RpcBuilder, EventEmitter);
+RpcBuilder.RpcNotification = RpcNotification;
+module.exports = RpcBuilder;
+var clients = __webpack_require__(1049);
+var transports = __webpack_require__(1051);
+RpcBuilder.clients = clients;
+RpcBuilder.clients.transports = transports;
+RpcBuilder.packers = packers;
+
+
+/***/ }),
+
+/***/ 524:
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
-var EventEmitter = __webpack_require__(147);
-var Publisher = (function () {
+var EventEmitter = __webpack_require__(135);
+var Publisher = /** @class */ (function () {
     function Publisher(stream, parentId) {
         var _this = this;
         this.ee = new EventEmitter();
@@ -2758,9 +4771,18 @@ var Publisher = (function () {
         this.stream.removeVideo(this.element);
         return this;
     };
+    Publisher.prototype.subscribeToRemote = function () {
+        this.stream.subscribeToMyRemote();
+    };
     Publisher.prototype.on = function (eventName, callback) {
         var _this = this;
         this.ee.addListener(eventName, function (event) {
+            if (event) {
+                console.info("Event '" + eventName + "' triggered by 'Publisher'", event);
+            }
+            else {
+                console.info("Event '" + eventName + "' triggered by 'Publisher'");
+            }
             callback(event);
         });
         if (eventName == 'videoElementCreated') {
@@ -2771,9 +4793,28 @@ var Publisher = (function () {
             }
             else {
                 this.stream.addEventListener('video-element-created-by-stream', function (element) {
-                    console.warn('Publisher emitting videoElementCreated');
                     _this.id = element.id;
                     _this.ee.emitEvent('videoElementCreated', [{
+                            element: element.element
+                        }]);
+                });
+            }
+        }
+        if (eventName == 'remoteVideoPlaying') {
+            var video = this.stream.getVideoElement();
+            if (this.stream.displayMyRemote() && video &&
+                video.currentTime > 0 &&
+                video.paused == false &&
+                video.ended == false &&
+                video.readyState == 4) {
+                this.ee.emitEvent('remoteVideoPlaying', [{
+                        element: this.stream.getVideoElement()
+                    }]);
+            }
+            else {
+                this.stream.addEventListener('remote-video-is-playing', function (element) {
+                    console.warn('Publisher emitting remoteVideoPlaying');
+                    _this.ee.emitEvent('remoteVideoPlaying', [{
                             element: element.element
                         }]);
                 });
@@ -2818,15 +4859,15 @@ exports.Publisher = Publisher;
 
 /***/ }),
 
-/***/ 555:
+/***/ 525:
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
-var Subscriber_1 = __webpack_require__(556);
-var EventEmitter = __webpack_require__(147);
-var Session = (function () {
+var Subscriber_1 = __webpack_require__(526);
+var EventEmitter = __webpack_require__(135);
+var Session = /** @class */ (function () {
     function Session(session, openVidu) {
         var _this = this;
         this.session = session;
@@ -2893,6 +4934,12 @@ var Session = (function () {
     };
     Session.prototype.on = function (eventName, callback) {
         this.session.addEventListener(eventName, function (event) {
+            if (event) {
+                console.info("Event '" + eventName + "' triggered by 'Session'", event);
+            }
+            else {
+                console.info("Event '" + eventName + "' triggered by 'Session'");
+            }
             callback(event);
         });
     };
@@ -2968,14 +5015,14 @@ exports.Session = Session;
 
 /***/ }),
 
-/***/ 556:
+/***/ 526:
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
-var EventEmitter = __webpack_require__(147);
-var Subscriber = (function () {
+var EventEmitter = __webpack_require__(135);
+var Subscriber = /** @class */ (function () {
     function Subscriber(stream, parentId) {
         this.ee = new EventEmitter();
         this.stream = stream;
@@ -2986,6 +5033,12 @@ var Subscriber = (function () {
     Subscriber.prototype.on = function (eventName, callback) {
         var _this = this;
         this.ee.addListener(eventName, function (event) {
+            if (event) {
+                console.info("Event '" + eventName + "' triggered by 'Subscriber'", event);
+            }
+            else {
+                console.info("Event '" + eventName + "' triggered by 'Subscriber'");
+            }
             callback(event);
         });
         if (eventName == 'videoElementCreated') {
@@ -3012,14 +5065,14 @@ exports.Subscriber = Subscriber;
 
 /***/ }),
 
-/***/ 557:
+/***/ 527:
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
 
 Object.defineProperty(exports, "__esModule", { value: true });
-var Stream_1 = __webpack_require__(325);
-var Connection = (function () {
+var Stream_1 = __webpack_require__(307);
+var Connection = /** @class */ (function () {
     function Connection(openVidu, local, room, options) {
         this.openVidu = openVidu;
         this.local = local;
@@ -3027,31 +5080,14 @@ var Connection = (function () {
         this.options = options;
         this.streams = {};
         this.streamsOpts = [];
+        console.info("'Connection' created (" + (local ? "local" : "remote") + ")" + (local ? "" : ", with 'connectionId' [" + (options ? options.id : '') + "] "));
         if (options) {
             this.connectionId = options.id;
             this.data = options.metadata;
             if (options.streams) {
-                for (var _i = 0, _a = options.streams; _i < _a.length; _i++) {
-                    var streamOptions = _a[_i];
-                    var streamOpts = {
-                        id: streamOptions.id,
-                        connection: this,
-                        recvVideo: (streamOptions.recvVideo == undefined ? true : streamOptions.recvVideo),
-                        recvAudio: (streamOptions.recvAudio == undefined ? true : streamOptions.recvAudio),
-                        audio: streamOptions.audio,
-                        video: streamOptions.video,
-                        data: streamOptions.data,
-                        mediaConstraints: streamOptions.mediaConstraints,
-                        audioOnly: streamOptions.audioOnly
-                    };
-                    var stream = new Stream_1.Stream(openVidu, false, room, streamOpts);
-                    this.addStream(stream);
-                    this.streamsOpts.push(streamOpts);
-                }
+                this.initStreams(options);
             }
         }
-        console.log("New " + (local ? "local " : "remote ") + "participant " + this.connectionId
-            + ", streams opts: ", this.streamsOpts);
     }
     Connection.prototype.addStream = function (stream) {
         this.streams[stream.getIdInParticipant()] = stream;
@@ -3079,6 +5115,26 @@ var Connection = (function () {
             }
         });
     };
+    Connection.prototype.initStreams = function (options) {
+        for (var _i = 0, _a = options.streams; _i < _a.length; _i++) {
+            var streamOptions = _a[_i];
+            var streamOpts = {
+                id: streamOptions.id,
+                connection: this,
+                recvVideo: (streamOptions.recvVideo == undefined ? true : streamOptions.recvVideo),
+                recvAudio: (streamOptions.recvAudio == undefined ? true : streamOptions.recvAudio),
+                audio: streamOptions.audio,
+                video: streamOptions.video,
+                data: streamOptions.data,
+                mediaConstraints: streamOptions.mediaConstraints,
+                audioOnly: streamOptions.audioOnly,
+            };
+            var stream = new Stream_1.Stream(this.openVidu, false, this.room, streamOpts);
+            this.addStream(stream);
+            this.streamsOpts.push(streamOpts);
+        }
+        console.info("Remote 'Connection' with 'connectionId' [" + this.connectionId + "] is now configured for receiving Streams with options: ", this.streamsOpts);
+    };
     return Connection;
 }());
 exports.Connection = Connection;
@@ -3086,7 +5142,7 @@ exports.Connection = Connection;
 
 /***/ }),
 
-/***/ 562:
+/***/ 529:
 /***/ (function(module, exports) {
 
 function webpackEmptyContext(req) {
@@ -3095,20 +5151,20 @@ function webpackEmptyContext(req) {
 webpackEmptyContext.keys = function() { return []; };
 webpackEmptyContext.resolve = webpackEmptyContext;
 module.exports = webpackEmptyContext;
-webpackEmptyContext.id = 562;
+webpackEmptyContext.id = 529;
 
 
 /***/ }),
 
-/***/ 563:
+/***/ 530:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_platform_browser_dynamic__ = __webpack_require__(704);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__app_app_module__ = __webpack_require__(735);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__environments_environment__ = __webpack_require__(739);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_platform_browser_dynamic__ = __webpack_require__(671);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__app_app_module__ = __webpack_require__(702);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__environments_environment__ = __webpack_require__(706);
 
 
 
@@ -3121,13 +5177,13 @@ __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_1__angular_platform_browser_dyna
 
 /***/ }),
 
-/***/ 734:
+/***/ 701:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_router__ = __webpack_require__(84);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__ = __webpack_require__(47);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_router__ = __webpack_require__(77);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__ = __webpack_require__(42);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return AppComponent; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -3152,8 +5208,8 @@ var AppComponent = (function () {
     AppComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-root',
-            template: __webpack_require__(821),
-            styles: [__webpack_require__(795)]
+            template: __webpack_require__(777),
+            styles: [__webpack_require__(761)]
         }), 
         __metadata('design:paramtypes', [(typeof (_a = typeof __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_1__angular_router__["a" /* Router */]) === 'function' && _a) || Object, (typeof (_b = typeof __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__["a" /* AuthenticationService */] !== 'undefined' && __WEBPACK_IMPORTED_MODULE_2__services_authentication_service__["a" /* AuthenticationService */]) === 'function' && _b) || Object])
     ], AppComponent);
@@ -3164,32 +5220,32 @@ var AppComponent = (function () {
 
 /***/ }),
 
-/***/ 735:
+/***/ 702:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_platform_browser__ = __webpack_require__(51);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_platform_browser__ = __webpack_require__(46);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__angular_core__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__angular_forms__ = __webpack_require__(43);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__angular_http__ = __webpack_require__(80);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__app_routing__ = __webpack_require__(736);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__angular_material__ = __webpack_require__(272);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6__angular_flex_layout__ = __webpack_require__(653);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_7_hammerjs__ = __webpack_require__(803);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__angular_forms__ = __webpack_require__(38);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__angular_http__ = __webpack_require__(73);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__app_routing__ = __webpack_require__(703);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__angular_material__ = __webpack_require__(258);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6__angular_flex_layout__ = __webpack_require__(620);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_7_hammerjs__ = __webpack_require__(769);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_7_hammerjs___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_7_hammerjs__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_8__app_component__ = __webpack_require__(734);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_9__components_presentation_presentation_component__ = __webpack_require__(481);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_10__components_dashboard_dahsboard_component__ = __webpack_require__(478);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_11__components_lesson_details_lesson_details_component__ = __webpack_require__(480);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_12__components_profile_profile_component__ = __webpack_require__(482);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_13__components_video_session_video_session_component__ = __webpack_require__(483);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_14__components_error_message_error_message_component__ = __webpack_require__(737);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_15__components_dashboard_join_session_dialog_component__ = __webpack_require__(479);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_16__services_authentication_service__ = __webpack_require__(47);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_17__services_user_service__ = __webpack_require__(485);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_18__services_lesson_service__ = __webpack_require__(291);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_19__services_video_session_service__ = __webpack_require__(292);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_20__auth_guard__ = __webpack_require__(477);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_8__app_component__ = __webpack_require__(701);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_9__components_presentation_presentation_component__ = __webpack_require__(463);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_10__components_dashboard_dahsboard_component__ = __webpack_require__(460);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_11__components_lesson_details_lesson_details_component__ = __webpack_require__(462);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_12__components_profile_profile_component__ = __webpack_require__(464);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_13__components_video_session_video_session_component__ = __webpack_require__(465);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_14__components_error_message_error_message_component__ = __webpack_require__(704);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_15__components_dashboard_join_session_dialog_component__ = __webpack_require__(461);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_16__services_authentication_service__ = __webpack_require__(42);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_17__services_user_service__ = __webpack_require__(467);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_18__services_lesson_service__ = __webpack_require__(277);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_19__services_video_session_service__ = __webpack_require__(278);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_20__auth_guard__ = __webpack_require__(459);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return AppModule; });
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
@@ -3264,17 +5320,17 @@ var AppModule = (function () {
 
 /***/ }),
 
-/***/ 736:
+/***/ 703:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_router__ = __webpack_require__(84);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__components_presentation_presentation_component__ = __webpack_require__(481);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__components_dashboard_dahsboard_component__ = __webpack_require__(478);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__components_lesson_details_lesson_details_component__ = __webpack_require__(480);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__components_profile_profile_component__ = __webpack_require__(482);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__components_video_session_video_session_component__ = __webpack_require__(483);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6__auth_guard__ = __webpack_require__(477);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__angular_router__ = __webpack_require__(77);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__components_presentation_presentation_component__ = __webpack_require__(463);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__components_dashboard_dahsboard_component__ = __webpack_require__(460);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__components_lesson_details_lesson_details_component__ = __webpack_require__(462);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__components_profile_profile_component__ = __webpack_require__(464);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__components_video_session_video_session_component__ = __webpack_require__(465);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6__auth_guard__ = __webpack_require__(459);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return routing; });
 
 
@@ -3315,7 +5371,7 @@ var routing = __WEBPACK_IMPORTED_MODULE_0__angular_router__["b" /* RouterModule 
 
 /***/ }),
 
-/***/ 737:
+/***/ 704:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -3365,8 +5421,8 @@ var ErrorMessageComponent = (function () {
     ErrorMessageComponent = __decorate([
         __webpack_require__.i(__WEBPACK_IMPORTED_MODULE_0__angular_core__["_5" /* Component */])({
             selector: 'app-error-message',
-            template: __webpack_require__(823),
-            styles: [__webpack_require__(797)]
+            template: __webpack_require__(779),
+            styles: [__webpack_require__(763)]
         }), 
         __metadata('design:paramtypes', [])
     ], ErrorMessageComponent);
@@ -3376,7 +5432,7 @@ var ErrorMessageComponent = (function () {
 
 /***/ }),
 
-/***/ 738:
+/***/ 705:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -3395,24 +5451,27 @@ var User = (function () {
 
 /***/ }),
 
-/***/ 739:
+/***/ 706:
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "a", function() { return environment; });
+// The file contents for the current environment will overwrite these during build.
+// The build system defaults to the dev environment which uses `environment.ts`, but if you do
+// `ng build --env=prod` then `environment.prod.ts` will be used instead.
+// The list of which env maps to which file can be found in `.angular-cli.json`.
 var environment = {
     production: false,
-    envName: 'container',
-    URL_BACK: window.location.origin
+    URL_BACK: 'https://localhost:5000'
 };
 //# sourceMappingURL=environment.js.map
 
 /***/ }),
 
-/***/ 795:
+/***/ 761:
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(49)();
+exports = module.exports = __webpack_require__(44)();
 // imports
 
 
@@ -3427,10 +5486,10 @@ module.exports = module.exports.toString();
 
 /***/ }),
 
-/***/ 796:
+/***/ 762:
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(49)();
+exports = module.exports = __webpack_require__(44)();
 // imports
 
 
@@ -3445,10 +5504,10 @@ module.exports = module.exports.toString();
 
 /***/ }),
 
-/***/ 797:
+/***/ 763:
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(49)();
+exports = module.exports = __webpack_require__(44)();
 // imports
 
 
@@ -3463,10 +5522,10 @@ module.exports = module.exports.toString();
 
 /***/ }),
 
-/***/ 798:
+/***/ 764:
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(49)();
+exports = module.exports = __webpack_require__(44)();
 // imports
 
 
@@ -3481,10 +5540,10 @@ module.exports = module.exports.toString();
 
 /***/ }),
 
-/***/ 799:
+/***/ 765:
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(49)();
+exports = module.exports = __webpack_require__(44)();
 // imports
 
 
@@ -3499,10 +5558,10 @@ module.exports = module.exports.toString();
 
 /***/ }),
 
-/***/ 800:
+/***/ 766:
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(49)();
+exports = module.exports = __webpack_require__(44)();
 // imports
 
 
@@ -3517,10 +5576,10 @@ module.exports = module.exports.toString();
 
 /***/ }),
 
-/***/ 801:
+/***/ 767:
 /***/ (function(module, exports, __webpack_require__) {
 
-exports = module.exports = __webpack_require__(49)();
+exports = module.exports = __webpack_require__(44)();
 // imports
 
 
@@ -3535,54 +5594,54 @@ module.exports = module.exports.toString();
 
 /***/ }),
 
-/***/ 821:
+/***/ 777:
 /***/ (function(module, exports) {
 
 module.exports = "<md-sidenav-container>\n\n  <md-sidenav #sidenav>\n    <button md-button (click)=\"router.navigate(['/lessons']); sidenav.close()\" class=\"sidenav-button\">Lessons</button>\n    <button md-button (click)=\"router.navigate(['/profile']); sidenav.close()\" class=\"sidenav-button\">Profile</button>\n    <button md-button (click)=\"sidenav.close(); authenticationService.directLogOut()\" class=\"sidenav-button\">Logout</button>\n  </md-sidenav>\n\n  <header *ngIf=\"!isVideoSessionUrl()\">\n    <md-toolbar color=\"primary\" class=\"mat-elevation-z6\">\n      <button md-button routerLink=\"/\" id=\"navbar-logo\">\n        OpenVidu Classroom Demo\n      </button>\n      <span class=\"fill-remaining-space\"></span>\n      <div *ngIf=\"authenticationService.isLoggedIn()\" fxLayout=\"row\" fxShow=\"false\" fxShow.gt-sm>\n        <button md-button routerLink=\"/lessons\">Lessons</button>\n        <button md-button routerLink=\"/profile\">Profile</button>\n        <button md-button (click)=\"authenticationService.directLogOut()\">LOGOUT</button>\n      </div>\n      <button *ngIf=\"authenticationService.isLoggedIn()\" md-button fxHide=\"false\" fxHide.gt-sm (click)=\"sidenav.open()\">\n        <md-icon>menu</md-icon>\n      </button>\n    </md-toolbar>\n  </header>\n\n  <main>\n    <router-outlet></router-outlet>\n  </main>\n\n  <footer *ngIf=\"!isVideoSessionUrl()\" class=\"page-footer back-primary color-secondary mat-elevation-z5\">\n    <div class=\"container\">\n      <div fxLayout=\"row\" fxLayout.xs=\"column\" fxLayoutAlign=\"start start\" fxLayoutAlign.xs=\"start\">\n        <div fxFlex=\"50%\" fxFlex.xs=\"100%\">\n          <h2>This is a sample application</h2>\n          <p class=\"grey-text text-lighten-4\">Implementing a secure real time app with OpenVidu</p>\n        </div>\n        <div fxFlex=\"50%\" fxFlex.xs=\"100%\">\n          <div fxLayout=\"row\" fxLayoutAlign=\"end start\" fxLayoutAlign.xs=\"start\">\n            <div fxFlex=\"50%\">\n              <h2>Technologies</h2>\n              <ul>\n                <li><a class=\"hover-link\" href=\"https://angular.io/\" target=\"_blank\">Angular</a></li>\n                <li><a class=\"hover-link\" href=\"https://material.angular.io/\" target=\"_blank\">Angular Material</a></li>\n                <li><a class=\"hover-link\" href=\"https://spring.io/\" target=\"_blank\">Spring Framework</a></li>\n                <li><a class=\"hover-link\" href=\"https://www.kurento.org/\" target=\"_blank\">Kurento</a></li>\n              </ul>\n            </div>\n            <div fxFlex=\"50%\">\n              <h2>Connect</h2>\n              <ul>\n                <li><a class=\"hover-link\" href=\"https://github.com/OpenVidu\" target=\"_blank\">GitHub repository</a></li>\n              </ul>\n            </div>\n          </div>\n        </div>\n      </div>\n    </div>\n  </footer>\n\n</md-sidenav-container>\n"
 
 /***/ }),
 
-/***/ 822:
+/***/ 778:
 /***/ (function(module, exports) {
 
 module.exports = "<div *ngIf=\"!this.lessons\" class=\"cssload-container\">\n  <div class=\"cssload-tube-tunnel\"></div>\n</div>\n\n<div *ngIf=\"this.lessons\" fxLayout=\"row\" fxLayoutAlign=\"center center\">\n  <div class=\"div-inner-main\" [style.xs]=\"{'width': '100%'}\">\n\n    <div *ngIf=\"!addingLesson\" fxLayout=\"row\" fxLayoutAlign=\"center center\">\n      <div fxFlex=\"80%\">MY LESSONS</div>\n      <md-icon fxFlex=\"20%\" fxLayoutAlign=\"end center\" *ngIf=\"authenticationService.isTeacher()\" (click)=\"addingLesson = true\"\n        [title]=\"'Add lesson'\">add_circle_outline</md-icon>\n    </div>\n\n    <div *ngIf=\"addingLesson\">\n      <div>NEW LESSON</div>\n      <form #newLessonForm (ngSubmit)=\"newLesson(); newLessonForm.reset()\" [class.filtered]=\"sumbitNewLesson\">\n        <md-input-container>\n          <input mdInput placeholder=\"Title\" [(ngModel)]=\"lessonTitle\" name=\"lessonTitle\" id=\"lessonTitle\" type=\"text\" autocomplete=\"off\"\n            required>\n        </md-input-container>\n        <div class=\"block-btn\">\n          <button md-button type=\"submit\" [disabled]=\"sumbitNewLesson\">Send</button>\n          <button md-button (click)=\"addingLesson = false; newLessonForm.reset()\" [disabled]=\"sumbitNewLesson\">Cancel</button>\n        </div>\n      </form>\n    </div>\n\n    <md-card *ngFor=\"let lesson of lessons\">\n      <div fxLayout=\"row\" fxLayoutAlign=\"center center\" fxLayoutGap=\"10px\">\n        <span fxFlex=\"70%\" class=\"title\">{{lesson.title}}</span>\n        <span fxFlex=\"70%\" *ngIf=\"this.authenticationService.isStudent()\" class=\"teacher\">{{lesson.teacher.nickName}}</span>\n        <md-icon fxFlex=\"15%\" *ngIf=\"this.authenticationService.isTeacher()\" (click)=\"goToLessonDetails(lesson)\" [title]=\"'Modify lesson'\">mode_edit</md-icon>\n        <md-icon fxFlex=\"15%\" (click)=\"goToLesson(lesson)\" [title]=\"'Go to lesson!'\">play_circle_filled</md-icon>\n      </div>\n    </md-card>\n\n    <div *ngIf=\"lessons.length === 0 && authenticationService.isStudent() && !addingLesson\">\n      <app-error-message [errorTitle]=\"'You do not have any lessons'\" [errorContent]=\"'Your teacher must invite you'\" [customClass]=\"'warning'\"\n        [closable]=\"false\"></app-error-message>\n    </div>\n\n    <div *ngIf=\"lessons.length === 0 && authenticationService.isTeacher() && !addingLesson\">\n      <app-error-message [errorTitle]=\"'You do not have any lessons'\" [errorContent]=\"'You can add one by clicking on the icon above'\"\n        [customClass]=\"'warning'\" [closable]=\"false\"></app-error-message>\n    </div>\n\n  </div>\n</div>\n"
 
 /***/ }),
 
-/***/ 823:
+/***/ 779:
 /***/ (function(module, exports) {
 
 module.exports = "<md-card [ngClass]=\"customClass\">\n  <md-icon *ngIf=\"closable\" (click)=\"closeAlert()\">clear</md-icon>\n  <md-card-title>{{this.errorTitle}}</md-card-title>\n  <md-card-subtitle [innerHTML]=\"this.errorContent\"></md-card-subtitle>\n</md-card>\n"
 
 /***/ }),
 
-/***/ 824:
+/***/ 780:
 /***/ (function(module, exports) {
 
 module.exports = "<div *ngIf=\"lesson\" fxLayout=\"row\" fxLayoutAlign=\"center center\">\n  <div class=\"div-inner-main\" [style.xs]=\"{'width': '100%'}\">\n\n    <div *ngIf=\"!editingTitle\" fxLayout=\"row\" fxLayoutAlign=\"center center\">\n      <md-icon fxFlex=\"15%\" fxLayoutAlign=\"start center\" (click)=\"router.navigate(['/lessons'])\" [title]=\"'Back to lessons'\">keyboard_arrow_left</md-icon>\n      <h2 fxFlex=\"70%\">{{lesson.title}}</h2>\n      <md-icon fxFlex=\"15%\" fxLayoutAlign=\"end center\" (click)=\"editingTitle = true; titleEdited = lesson.title\" [title]=\"'Edit lesson'\">mode_edit</md-icon>\n    </div>\n\n    <div *ngIf=\"editingTitle\" fxLayout=\"row\" fxLayoutAlign=\"start center\">\n      <form #editLessonForm (ngSubmit)=\"editLesson(); editLessonForm.reset()\" [class.filtered]=\"sumbitEditLesson\">\n        <md-input-container>\n          <input mdInput placeholder=\"Title\" [(ngModel)]=\"titleEdited\" name=\"lessonTitle\" type=\"text\" autocomplete=\"off\" required>\n        </md-input-container>\n        <div class=\"block-btn\">\n          <button md-button type=\"submit\" [disabled]=\"sumbitEditLesson\">Send</button>\n          <a md-button (click)=\"editingTitle = false; titleEdited = ''\" [disabled]=\"sumbitEditLesson\">Cancel</a>\n          <a md-button (click)=\"deleteLesson()\" [disabled]=\"sumbitEditLesson\">Delete lesson</a>\n        </div>\n      </form>\n    </div>\n\n    <form #addAttendersForm (ngSubmit)=\"addLessonAttenders(); addAttendersForm.reset()\" [class.filtered]=\"sumbitAddAttenders\">\n      <h4 id=\"new-attender-title\">New attender</h4>\n      <md-input-container>\n        <input mdInput placeholder=\"Email\" [(ngModel)]=\"emailAttender\" name=\"attenderEmail\" type=\"text\" autocomplete=\"off\" required>\n      </md-input-container>\n      <div class=\"block-btn\">\n        <button md-button type=\"submit\" [disabled]=\"sumbitAddAttenders\">Send</button>\n        <a md-button (click)=\"addAttendersForm.reset()\" [disabled]=\"sumbitAddAttenders || emailAttender == null\">Cancel</a>\n      </div>\n    </form>\n\n    <app-error-message *ngIf=\"addAttendersCorrect\" (eventShowable)=\"addAttendersCorrect = false\" [errorTitle]=\"attCorrectTitle\"\n      [errorContent]=\"attCorrectContent\" [customClass]=\"'correct'\" [closable]=\"true\"></app-error-message>\n    <app-error-message *ngIf=\"addAttendersError\" (eventShowable)=\"addAttendersError = false\" [errorTitle]=\"attErrorTitle\" [errorContent]=\"attErrorContent\"\n      [customClass]=\"'fail'\" [closable]=\"true\"></app-error-message>\n\n    <div fxLayout=\"row\" fxLayout.xs=\"column\" fxLayoutGap=\"20px\" fxLayoutAlign=\"space-between center\" fxLayoutAlign.xs=\"start\"\n      class=\"attender-row\">\n      <div fxFlex=\"90%\" class=\"no-margin-bottom\">\n        <div fxLayout=\"row\" fxLayout.xs=\"column\" fxLayoutAlign=\"space-between center\" fxLayoutAlign.xs=\"start\" fxLayoutGap=\"20px\">\n          <div class=\"no-margin-bottom\" fxFlex>{{authenticationService.getCurrentUser().nickName}}</div>\n          <div class=\"attender-email\" fxFlex>{{authenticationService.getCurrentUser().name}}</div>\n        </div>\n      </div>\n      <div fxFlex=\"10%\"></div>\n    </div>\n    <div *ngFor=\"let attender of lesson.attenders; let i = index\">\n      <div *ngIf=\"attender.id != authenticationService.getCurrentUser().id\" fxLayout=\"row\" fxLayoutAlign.xs=\"start\" fxLayoutGap=\"20px\"\n        class=\"attender-row\">\n        <div fxFlex=\"90%\">\n          <div fxLayout=\"row\" fxLayout.xs=\"column\" fxLayoutAlign=\"space-between center\" fxLayoutAlign.xs=\"start\" fxLayoutGap=\"20px\">\n            <div class=\"no-margin-bottom\" fxFlex>{{attender.nickName}}</div>\n            <div class=\"attender-email\" fxFlex>{{attender.name}}</div>\n          </div>\n        </div>\n        <div fxFlex=\"10%\">\n          <md-icon *ngIf=\"!this.arrayOfAttDels[i]\" (click)=\"deleteLessonAttender(i, attender)\" [title]=\"'Remove attender'\">clear</md-icon>\n          <md-icon *ngIf=\"this.arrayOfAttDels[i]\" class=\"rotating\">cached</md-icon>\n        </div>\n      </div>\n    </div>\n    \n  </div>\n</div>\n"
 
 /***/ }),
 
-/***/ 825:
+/***/ 781:
 /***/ (function(module, exports) {
 
 module.exports = "<div fxLayout=\"row\" fxLayoutAlign=\"center center\">\n  <div class=\"div-inner-main\" [style.xs]=\"{'width': '100%'}\">\n\n    <h1>OpenVidu Classroom Demo</h1>\n\n    <div fxLayout=\"column\" fxLayoutAlign=\"space-around center\">\n\n      <md-card>\n        <md-card-content>\n\n          <div *ngIf=\"submitProcessing\" class=\"cssload-container\">\n            <div class=\"cssload-tube-tunnel\"></div>\n          </div>\n\n          <form #myForm (ngSubmit)=\"onSubmit()\" [class.filtered]=\"submitProcessing\">\n\n            <div>\n              <md-input-container>\n                <input mdInput placeholder=\"Email\" [(ngModel)]=\"email\" name=\"email\" id=\"email\" type=\"email\" required>\n              </md-input-container>\n            </div>\n\n            <div *ngIf=\"!loginView\">\n              <md-input-container>\n                <input mdInput placeholder=\"Name\" [(ngModel)]=\"nickName\" name=\"nickName\" id=\"nickName\" type=\"text\" autocomplete=\"off\" required>\n              </md-input-container>\n            </div>\n\n            <div>\n              <md-input-container>\n                <input mdInput placeholder=\"Password\" [(ngModel)]=\"password\" name=\"password\" id=\"password\" type=\"password\" required>\n              </md-input-container>\n            </div>\n\n            <div *ngIf=\"!loginView\">\n              <md-input-container>\n                <input mdInput placeholder=\"Confirm password\" [(ngModel)]=\"confirmPassword\" name=\"confirmPassword\" id=\"confirmPassword\" type=\"password\"\n                  autocomplete=\"off\" required>\n              </md-input-container>\n            </div>\n\n            <div *ngIf=\"!loginView\" class=\"radio-button-div\">\n              <span id=\"sign-up-as\">Sign up as...</span>\n              <md-radio-group [(ngModel)]=\"roleUserSignup\" name=\"roleUserSignup\" id=\"roleUserSignup\">\n                <md-radio-button value='student'>Student</md-radio-button>\n                <md-radio-button value='teacher'>Teacher</md-radio-button>\n              </md-radio-group>\n            </div>\n\n            <app-error-message *ngIf=\"fieldsIncorrect\" (eventShowable)=\"fieldsIncorrect = false\" [errorTitle]=\"errorTitle\" [errorContent]=\"errorContent\"\n              [customClass]=\"customClass\" [closable]=\"true\"></app-error-message>\n\n            <div class=\"btn-container\">\n              <button md-raised-button color=\"accent\" type=\"submit\" *ngIf=\"loginView\" id=\"log-in-btn\">Log in</button>\n              <button md-icon-button *ngIf=\"loginView\" type=\"button\" (click)=\"tableShow=!tableShow\" mdTooltip=\"Show registered users\" mdTooltipPosition=\"right\"><md-icon>info_outline</md-icon></button>\n              <button md-raised-button color=\"primary\" type=\"submit\" *ngIf=\"!loginView\" id=\"sign-up-btn\">Sign up</button>\n            </div>\n\n          </form>\n\n          <div *ngIf=\"loginView && tableShow\">\n            <table>\n              <tr>\n                <th>Email</th>\n                <th>Password</th>\n              </tr>\n              <tr>\n                <td>teacher@gmail.com</td>\n                <td>pass</td>\n              </tr>\n              <tr>\n                <td>student1@gmail.com</td>\n                <td>pass</td>\n              </tr>\n              <tr>\n                <td>student2@gmail.com</td>\n                <td>pass</td>\n              </tr>\n            </table>\n          </div>\n\n        </md-card-content>\n\n        <md-card-actions>\n          <div *ngIf=\"loginView\">Not registered yet?<button md-button (click)=\"setLoginView(false); tableShow=false; myForm.reset()\" class=\"card-button\">Sign up</button></div>\n          <div *ngIf=\"!loginView\">Already registered?<button md-button (click)=\"setLoginView(true); myForm.reset()\" class=\"card-button\">Log in</button></div>\n        </md-card-actions>\n\n      </md-card>\n\n    </div>\n\n  </div>\n</div>\n"
 
 /***/ }),
 
-/***/ 826:
+/***/ 782:
 /***/ (function(module, exports) {
 
 module.exports = "<div fxLayout=\"row\" fxLayoutAlign=\"center center\">\n  <div class=\"div-inner-main\" [style.xs]=\"{'width': '100%'}\">\n\n    <div>MY PROFILE</div>\n    <table>\n      <tr>\n        <td>Name</td>\n        <th>{{authenticationService.getCurrentUser().nickName}}</th>\n      </tr>\n      <tr>\n        <td>Email</td>\n        <th>{{authenticationService.getCurrentUser().name}}</th>\n      </tr>\n    </table>\n    \n  </div>\n</div>\n"
 
 /***/ }),
 
-/***/ 827:
+/***/ 783:
 /***/ (function(module, exports) {
 
 module.exports = "<div id=\"header-div\">\n    <md-icon id=\"back-btn\" (click)=\"location.back()\" [title]=\"'Back to lessons'\">keyboard_arrow_left</md-icon>\n    <md-icon class=\"right-btn\" (click)=\"toggleFullScreen()\" [title]=\"'Fullscreen'\">{{fullscreenIcon}}</md-icon>\n    <md-icon class=\"right-btn\" (click)=\"toggleLocalVideo()\" [title]=\"'Toggle video'\">{{videoIcon}}</md-icon>\n    <md-icon class=\"right-btn\" (click)=\"toggleLocalAudio()\" [title]=\"'Toggle audio'\">{{audioIcon}}</md-icon>\n    <h1>{{lesson?.title}}</h1>\n</div>\n<div id=\"publisher\"></div>\n<div id=\"subscriber\"></div>"
 
 /***/ })
 
-},[1138]);
+},[1077]);
 //# sourceMappingURL=main.bundle.js.map
