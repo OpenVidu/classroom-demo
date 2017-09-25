@@ -2492,10 +2492,13 @@ var Stream = /** @class */ (function () {
             thumb: thumbnailId,
             video: this.video
         });
-        if (this.local) {
+        if (this.local && !this.displayMyRemote()) {
             this.video.muted = true;
             this.video.onplay = function () {
                 console.info("Local 'Stream' with id [" + _this.getId() + "] video is now playing");
+                _this.ee.emitEvent('video-is-playing', [{
+                        element: _this.video
+                    }]);
             };
         }
         else {
@@ -2784,9 +2787,15 @@ var Stream = /** @class */ (function () {
                     var video = videoElement.video;
                     video.srcObject = _this.wrStream;
                     video.onplay = function () {
-                        console.info("Remote 'Stream' with id [" + _this.getId() + "] video is now playing");
                         if (_this.local && _this.displayMyRemote()) {
+                            console.info("Your own remote 'Stream' with id [" + _this.getId() + "] video is now playing");
                             _this.ee.emitEvent('remote-video-is-playing', [{
+                                    element: _this.video
+                                }]);
+                        }
+                        else if (!_this.local && !_this.displayMyRemote()) {
+                            console.info("Remote 'Stream' with id [" + _this.getId() + "] video is now playing");
+                            _this.ee.emitEvent('video-is-playing', [{
                                     element: _this.video
                                 }]);
                         }
@@ -4792,9 +4801,28 @@ var Publisher = /** @class */ (function () {
                     }]);
             }
             else {
-                this.stream.addEventListener('video-element-created-by-stream', function (element) {
+                this.stream.addOnceEventListener('video-element-created-by-stream', function (element) {
                     _this.id = element.id;
                     _this.ee.emitEvent('videoElementCreated', [{
+                            element: element.element
+                        }]);
+                });
+            }
+        }
+        if (eventName == 'videoPlaying') {
+            var video = this.stream.getVideoElement();
+            if (!this.stream.displayMyRemote() && video &&
+                video.currentTime > 0 &&
+                video.paused == false &&
+                video.ended == false &&
+                video.readyState == 4) {
+                this.ee.emitEvent('videoPlaying', [{
+                        element: this.stream.getVideoElement()
+                    }]);
+            }
+            else {
+                this.stream.addOnceEventListener('video-is-playing', function (element) {
+                    _this.ee.emitEvent('videoPlaying', [{
                             element: element.element
                         }]);
                 });
@@ -4812,8 +4840,7 @@ var Publisher = /** @class */ (function () {
                     }]);
             }
             else {
-                this.stream.addEventListener('remote-video-is-playing', function (element) {
-                    console.warn('Publisher emitting remoteVideoPlaying');
+                this.stream.addOnceEventListener('remote-video-is-playing', function (element) {
                     _this.ee.emitEvent('remoteVideoPlaying', [{
                             element: element.element
                         }]);
@@ -5048,11 +5075,30 @@ var Subscriber = /** @class */ (function () {
                     }]);
             }
             else {
-                this.stream.addEventListener('video-element-created-by-stream', function (element) {
+                this.stream.addOnceEventListener('video-element-created-by-stream', function (element) {
                     console.warn("Subscriber emitting videoElementCreated");
                     _this.id = element.id;
                     _this.ee.emitEvent('videoElementCreated', [{
                             element: element
+                        }]);
+                });
+            }
+        }
+        if (eventName == 'videoPlaying') {
+            var video = this.stream.getVideoElement();
+            if (!this.stream.displayMyRemote() && video &&
+                video.currentTime > 0 &&
+                video.paused == false &&
+                video.ended == false &&
+                video.readyState == 4) {
+                this.ee.emitEvent('videoPlaying', [{
+                        element: this.stream.getVideoElement()
+                    }]);
+            }
+            else {
+                this.stream.addOnceEventListener('video-is-playing', function (element) {
+                    _this.ee.emitEvent('videoPlaying', [{
+                            element: element.element
                         }]);
                 });
             }
