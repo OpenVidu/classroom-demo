@@ -1,8 +1,8 @@
-md-card {
+mat-card {
   margin-top: 20px;
 }
 
-md-card md-icon {
+mat-card mat-icon {
   text-align: center;
 }
 

@@ -1,4 +1,4 @@
-@import '~@angular/material/core/theming/prebuilt/deeppurple-amber.css';
+@import '~@angular/material/prebuilt-themes/deeppurple-amber.css';
 
 * {
   font-family: 'Exo 2', sans-serif;
@@ -25,11 +25,11 @@ li {
   list-style: none;
 }
 
-md-icon {
+mat-icon {
   cursor: pointer;
 }
 
-md-icon:hover {
+mat-icon:hover {
   color: grey;
 }
 

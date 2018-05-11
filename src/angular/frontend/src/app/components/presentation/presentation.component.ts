@@ -21,8 +21,6 @@ export class PresentationComponent implements OnInit, AfterViewChecked {
   private fieldsIncorrect: boolean;
   private submitProcessing: boolean;
 
-  private tableShow = false;
-
   // Error message content
   private errorTitle: string;
   private errorContent: string;

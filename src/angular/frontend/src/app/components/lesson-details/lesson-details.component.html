@@ -2,32 +2,32 @@
   <div class="div-inner-main" [style.xs]="{'width': '100%'}">
 
     <div *ngIf="!editingTitle" fxLayout="row" fxLayoutAlign="center center">
-      <md-icon fxFlex="15%" fxLayoutAlign="start center" (click)="router.navigate(['/lessons'])" [title]="'Back to lessons'">keyboard_arrow_left</md-icon>
+      <mat-icon fxFlex="15%" fxLayoutAlign="start center" (click)="router.navigate(['/lessons'])" [title]="'Back to lessons'">keyboard_arrow_left</mat-icon>
       <h2 fxFlex="70%">{{lesson.title}}</h2>
-      <md-icon fxFlex="15%" fxLayoutAlign="end center" (click)="editingTitle = true; titleEdited = lesson.title" [title]="'Edit lesson'">mode_edit</md-icon>
+      <mat-icon fxFlex="15%" fxLayoutAlign="end center" (click)="editingTitle = true; titleEdited = lesson.title" [title]="'Edit lesson'">mode_edit</mat-icon>
     </div>
 
     <div *ngIf="editingTitle" fxLayout="row" fxLayoutAlign="start center">
       <form #editLessonForm (ngSubmit)="editLesson(); editLessonForm.reset()" [class.filtered]="sumbitEditLesson">
-        <md-input-container>
-          <input mdInput placeholder="Title" [(ngModel)]="titleEdited" name="lessonTitle" type="text" autocomplete="off" required>
-        </md-input-container>
+        <mat-input-container>
+          <input matInput placeholder="Title" [(ngModel)]="titleEdited" name="lessonTitle" type="text" autocomplete="off" required>
+        </mat-input-container>
         <div class="block-btn">
-          <button md-button type="submit" [disabled]="sumbitEditLesson">Send</button>
-          <a md-button (click)="editingTitle = false; titleEdited = ''" [disabled]="sumbitEditLesson">Cancel</a>
-          <a md-button (click)="deleteLesson()" [disabled]="sumbitEditLesson">Delete lesson</a>
+          <button mat-button type="submit" [disabled]="sumbitEditLesson">Send</button>
+          <button mat-button (click)="editingTitle = false; titleEdited = ''" [disabled]="sumbitEditLesson">Cancel</button>
+          <button mat-button (click)="deleteLesson()" [disabled]="sumbitEditLesson">Delete lesson</button>
         </div>
       </form>
     </div>
 
     <form #addAttendersForm (ngSubmit)="addLessonAttenders(); addAttendersForm.reset()" [class.filtered]="sumbitAddAttenders">
       <h4 id="new-attender-title">New attender</h4>
-      <md-input-container>
-        <input mdInput placeholder="Email" [(ngModel)]="emailAttender" name="attenderEmail" type="text" autocomplete="off" required>
-      </md-input-container>
+      <mat-input-container>
+        <input matInput placeholder="Email" [(ngModel)]="emailAttender" name="attenderEmail" type="text" autocomplete="off" required>
+      </mat-input-container>
       <div class="block-btn">
-        <button md-button type="submit" [disabled]="sumbitAddAttenders">Send</button>
-        <a md-button (click)="addAttendersForm.reset()" [disabled]="sumbitAddAttenders || emailAttender == null">Cancel</a>
+        <button mat-button type="submit" [disabled]="sumbitAddAttenders">Send</button>
+        <button mat-button (click)="addAttendersForm.reset()" [disabled]="sumbitAddAttenders || emailAttender == null">Cancel</button>
       </div>
     </form>
 
@@ -56,8 +56,8 @@
           </div>
         </div>
         <div fxFlex="10%">
-          <md-icon *ngIf="!this.arrayOfAttDels[i]" (click)="deleteLessonAttender(i, attender)" [title]="'Remove attender'">clear</md-icon>
-          <md-icon *ngIf="this.arrayOfAttDels[i]" class="rotating">cached</md-icon>
+          <mat-icon *ngIf="!this.arrayOfAttDels[i]" (click)="deleteLessonAttender(i, attender)" [title]="'Remove attender'">clear</mat-icon>
+          <mat-icon *ngIf="this.arrayOfAttDels[i]" class="rotating">cached</mat-icon>
         </div>
       </div>
     </div>

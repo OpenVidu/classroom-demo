@@ -1,30 +1,30 @@
-<md-sidenav-container>
+<mat-sidenav-container>
 
-  <md-sidenav #sidenav>
-    <button md-button (click)="router.navigate(['/lessons']); sidenav.close()" class="sidenav-button">Lessons</button>
-    <button md-button (click)="router.navigate(['/profile']); sidenav.close()" class="sidenav-button">Profile</button>
-    <button md-button (click)="sidenav.close(); authenticationService.directLogOut()" class="sidenav-button">Logout</button>
-  </md-sidenav>
+  <mat-sidenav #sidenav>
+    <button mat-button (click)="router.navigate(['/lessons']); sidenav.close()" class="sidenav-button">Lessons</button>
+    <button mat-button (click)="router.navigate(['/profile']); sidenav.close()" class="sidenav-button">Profile</button>
+    <button mat-button (click)="sidenav.close(); authenticationService.directLogOut()" class="sidenav-button">Logout</button>
+  </mat-sidenav>
 
   <header *ngIf="!isVideoSessionUrl()">
-    <md-toolbar color="primary" class="mat-elevation-z6">
-      <button md-button routerLink="/" id="navbar-logo">
+    <mat-toolbar color="primary" class="mat-elevation-z6">
+      <button mat-button routerLink="/" id="navbar-logo">
         OpenVidu Classroom Demo
       </button>
       <span class="fill-remaining-space"></span>
       <div *ngIf="authenticationService.isLoggedIn()" fxLayout="row" fxShow="false" fxShow.gt-sm>
-        <button md-button routerLink="/lessons">Lessons</button>
-        <button md-button routerLink="/profile">Profile</button>
-        <button md-button (click)="authenticationService.directLogOut()">LOGOUT</button>
+        <button mat-button routerLink="/lessons">Lessons</button>
+        <button mat-button routerLink="/profile">Profile</button>
+        <button mat-button (click)="authenticationService.directLogOut()">LOGOUT</button>
       </div>
-      <button *ngIf="authenticationService.isLoggedIn()" md-button fxHide="false" fxHide.gt-sm (click)="sidenav.open()">
-        <md-icon>menu</md-icon>
+      <button *ngIf="authenticationService.isLoggedIn()" mat-button fxHide="false" fxHide.gt-sm (click)="sidenav.open()">
+        <mat-icon>menu</mat-icon>
       </button>
-    </md-toolbar>
+    </mat-toolbar>
   </header>
 
-  <main>
-    <router-outlet></router-outlet>
+  <main [@routerTransition]="o.isActivated && o.activatedRoute.routeConfig.path">
+    <router-outlet #o="outlet"></router-outlet>
   </main>
 
   <footer *ngIf="!isVideoSessionUrl()" class="page-footer back-primary color-secondary mat-elevation-z5">
@@ -39,16 +39,26 @@
             <div fxFlex="50%">
               <h2>Technologies</h2>
               <ul>
-                <li><a class="hover-link" href="https://angular.io/" target="_blank">Angular</a></li>
-                <li><a class="hover-link" href="https://material.angular.io/" target="_blank">Angular Material</a></li>
-                <li><a class="hover-link" href="https://spring.io/" target="_blank">Spring Framework</a></li>
-                <li><a class="hover-link" href="https://www.kurento.org/" target="_blank">Kurento</a></li>
+                <li>
+                  <a class="hover-link" href="https://angular.io/" target="_blank">Angular</a>
+                </li>
+                <li>
+                  <a class="hover-link" href="https://material.angular.io/" target="_blank">Angular Material</a>
+                </li>
+                <li>
+                  <a class="hover-link" href="https://spring.io/" target="_blank">Spring Framework</a>
+                </li>
+                <li>
+                  <a class="hover-link" href="https://www.kurento.org/" target="_blank">Kurento</a>
+                </li>
               </ul>
             </div>
             <div fxFlex="50%">
               <h2>Connect</h2>
               <ul>
-                <li><a class="hover-link" href="https://github.com/OpenVidu" target="_blank">GitHub repository</a></li>
+                <li>
+                  <a class="hover-link" href="https://github.com/OpenVidu" target="_blank">GitHub repository</a>
+                </li>
               </ul>
             </div>
           </div>
@@ -57,4 +67,4 @@
     </div>
   </footer>
 
-</md-sidenav-container>
+</mat-sidenav-container>

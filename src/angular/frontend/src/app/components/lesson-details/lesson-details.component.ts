@@ -1,7 +1,7 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { ActivatedRoute, Params, Router } from '@angular/router';
 import { Location } from '@angular/common';
-import { MdSnackBar } from '@angular/material';
+import { MatSnackBar } from '@angular/material';
 
 import { Lesson } from '../../models/lesson';
 import { User } from '../../models/user';
@@ -39,7 +39,7 @@ export class LessonDetailsComponent implements OnInit {
         private router: Router,
         private route: ActivatedRoute,
         private location: Location,
-        public snackBar: MdSnackBar
+        public snackBar: MatSnackBar
     ) { }
 
     ngOnInit(): void {
@@ -51,7 +51,7 @@ export class LessonDetailsComponent implements OnInit {
     editLesson() {
         if (this.titleEdited !== this.lesson.title) {
             this.sumbitEditLesson = true;
-            let l = new Lesson(this.titleEdited);
+            const l = new Lesson(this.titleEdited);
             l.id = this.lesson.id;
             this.lessonService.editLesson(l).subscribe(
                 lesson => {
@@ -98,7 +98,7 @@ export class LessonDetailsComponent implements OnInit {
                 console.log('Attender added');
                 console.log(response);
                 this.sumbitAddAttenders = false;
-                let newAttenders = response.attendersAdded as User[];
+                const newAttenders = response.attendersAdded as User[];
                 this.lesson.attenders = this.lesson.attenders.concat(newAttenders);
                 this.handleAttendersMessage(response);
             },
@@ -111,11 +111,12 @@ export class LessonDetailsComponent implements OnInit {
 
     deleteLessonAttender(i: number, attender: User) {
         this.arrayOfAttDels[i] = true;
-        let l = new Lesson(this.lesson.title);
+        const l = new Lesson(this.lesson.title);
         l.id = this.lesson.id;
-        for (let i = 0; i < this.lesson.attenders.length; i++) {
-            if (this.lesson.attenders[i].id !== attender.id) {
-                l.attenders.push(new User(this.lesson.attenders[i])); //Inserting a new User object equal to the attender but "lessons" array empty
+        for (let j = 0; j < this.lesson.attenders.length; j++) {
+            if (this.lesson.attenders[j].id !== attender.id) {
+                // Inserting a new User object equal to the attender but "lessons" array empty
+                l.attenders.push(new User(this.lesson.attenders[j]));
             }
         }
         this.lessonService.deleteLessonAttenders(l).subscribe(
@@ -136,49 +137,49 @@ export class LessonDetailsComponent implements OnInit {
     // Creates an error message when there is any problem during the process of adding Users to a Lesson
     // It also generates a correct feedback message when any student has been correctly added to the Lesson
     handleAttendersMessage(response) {
-        let isError: boolean = false;
-        let isCorrect: boolean = false;
-        this.attErrorContent = "";
-        this.attCorrectContent = "";
+        let isError = false;
+        let isCorrect = false;
+        this.attErrorContent = '';
+        this.attCorrectContent = '';
 
         if (response.attendersAdded.length > 0) {
-            for (let user of response.attendersAdded) {
-                this.attCorrectContent += "<span class='feedback-list'>" + user.name + "</span>";
+            for (const user of response.attendersAdded) {
+                this.attCorrectContent += '<span class=\'feedback-list\'>' + user.name + '</span>';
             }
             isCorrect = true;
         }
         if (response.attendersAlreadyAdded.length > 0) {
-            this.attErrorContent += "<span>The following users were already added to the lesson</span>";
-            for (let user of response.attendersAlreadyAdded) {
-                this.attErrorContent += "<span class='feedback-list'>" + user.name + "</span>";
+            this.attErrorContent += '<span>The following users were already added to the lesson</span>';
+            for (const user of response.attendersAlreadyAdded) {
+                this.attErrorContent += '<span class=\'feedback-list\'>' + user.name + '</span>';
             }
             isError = true;
         }
         if (response.emailsValidNotRegistered.length > 0) {
-            this.attErrorContent += "<span>The following users are not registered</span>";
-            for (let email of response.emailsValidNotRegistered) {
-                this.attErrorContent += "<span class='feedback-list'>" + email + "</span>";
+            this.attErrorContent += '<span>The following users are not registered</span>';
+            for (const email of response.emailsValidNotRegistered) {
+                this.attErrorContent += '<span class=\'feedback-list\'>' + email + '</span>';
             }
             isError = true;
         }
         if (response.emailsInvalid) {
             if (response.emailsInvalid.length > 0) {
-                this.attErrorContent += "<span>These are not valid emails</span>";
-                for (let email of response.emailsInvalid) {
-                    this.attErrorContent += "<span class='feedback-list'>" + email + "</span>";
+                this.attErrorContent += '<span>These are not valid emails</span>';
+                for (const email of response.emailsInvalid) {
+                    this.attErrorContent += '<span class=\'feedback-list\'>' + email + '</span>';
                 }
                 isError = true;
             }
         }
         if (isError) {
-            this.attErrorTitle = "There have been some problems";
+            this.attErrorTitle = 'There have been some problems';
             this.addAttendersError = true;
-        } else if (response.attendersAdded.length == 0) {
-            this.attErrorTitle = "No emails there!";
+        } else if (response.attendersAdded.length === 0) {
+            this.attErrorTitle = 'No emails there!';
             this.addAttendersError = true;
         }
         if (isCorrect) {
-            this.attCorrectTitle = "The following users where properly added";
+            this.attCorrectTitle = 'The following users where properly added';
             this.addAttendersCorrect = true;
         }
     }

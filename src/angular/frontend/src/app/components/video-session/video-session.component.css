@@ -9,9 +9,15 @@ h1 {
   z-index: 1000;
   width: 100%;
   background: rgba(0, 0, 0, 0.4);
+  -webkit-touch-callout: none; /* iOS Safari */
+  -webkit-user-select: none; /* Safari */
+   -khtml-user-select: none; /* Konqueror HTML */
+     -moz-user-select: none; /* Firefox */
+      -ms-user-select: none; /* Internet Explorer/Edge */
+          user-select: none;
 }
 
-md-icon {
+mat-icon {
   font-size: 38px;
   width: 38px;
   height: 38px;
@@ -23,7 +29,7 @@ md-icon {
   transition: color .2s linear;
 }
 
-md-icon:hover {
+mat-icon:hover {
   color: #ffd740;
 }
 

@@ -7,32 +7,32 @@
 
     <div *ngIf="!addingLesson" fxLayout="row" fxLayoutAlign="center center">
       <div fxFlex="80%">MY LESSONS</div>
-      <md-icon fxFlex="20%" fxLayoutAlign="end center" *ngIf="authenticationService.isTeacher()" (click)="addingLesson = true"
-        [title]="'Add lesson'">add_circle_outline</md-icon>
+      <mat-icon fxFlex="20%" fxLayoutAlign="end center" *ngIf="authenticationService.isTeacher()" (click)="addingLesson = true"
+        [title]="'Add lesson'">add_circle_outline</mat-icon>
     </div>
 
     <div *ngIf="addingLesson">
       <div>NEW LESSON</div>
       <form #newLessonForm (ngSubmit)="newLesson(); newLessonForm.reset()" [class.filtered]="sumbitNewLesson">
-        <md-input-container>
-          <input mdInput placeholder="Title" [(ngModel)]="lessonTitle" name="lessonTitle" id="lessonTitle" type="text" autocomplete="off"
+        <mat-input-container>
+          <input matInput placeholder="Title" [(ngModel)]="lessonTitle" name="lessonTitle" id="lessonTitle" type="text" autocomplete="off"
             required>
-        </md-input-container>
+        </mat-input-container>
         <div class="block-btn">
-          <button md-button type="submit" [disabled]="sumbitNewLesson">Send</button>
-          <button md-button (click)="addingLesson = false; newLessonForm.reset()" [disabled]="sumbitNewLesson">Cancel</button>
+          <button mat-button type="submit" [disabled]="sumbitNewLesson">Send</button>
+          <button mat-button (click)="addingLesson = false; newLessonForm.reset()" [disabled]="sumbitNewLesson">Cancel</button>
         </div>
       </form>
     </div>
 
-    <md-card *ngFor="let lesson of lessons">
+    <mat-card *ngFor="let lesson of lessons">
       <div fxLayout="row" fxLayoutAlign="center center" fxLayoutGap="10px">
         <span fxFlex="70%" class="title">{{lesson.title}}</span>
         <span fxFlex="70%" *ngIf="this.authenticationService.isStudent()" class="teacher">{{lesson.teacher.nickName}}</span>
-        <md-icon fxFlex="15%" *ngIf="this.authenticationService.isTeacher()" (click)="goToLessonDetails(lesson)" [title]="'Modify lesson'">mode_edit</md-icon>
-        <md-icon fxFlex="15%" (click)="goToLesson(lesson)" [title]="'Go to lesson!'">play_circle_filled</md-icon>
+        <mat-icon fxFlex="15%" *ngIf="this.authenticationService.isTeacher()" (click)="goToLessonDetails(lesson)" [title]="'Modify lesson'">mode_edit</mat-icon>
+        <mat-icon fxFlex="15%" (click)="goToLesson(lesson)" [title]="'Go to lesson!'">play_circle_filled</mat-icon>
       </div>
-    </md-card>
+    </mat-card>
 
     <div *ngIf="lessons.length === 0 && authenticationService.isStudent() && !addingLesson">
       <app-error-message [errorTitle]="'You do not have any lessons'" [errorContent]="'Your teacher must invite you'" [customClass]="'warning'"

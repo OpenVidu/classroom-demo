@@ -1,15 +1,16 @@
-import { BrowserModule } from '@angular/platform-browser';
 import { NgModule } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpModule } from '@angular/http';
-
-import { routing } from './app.routing';
-
-import { MaterialModule } from '@angular/material';
+import { BrowserModule } from '@angular/platform-browser';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { FlexLayoutModule } from '@angular/flex-layout';
+
 import 'hammerjs';
 
+import { MaterialModule } from './material.module';
+import { routing } from './app.routing';
 import { AppComponent } from './app.component';
+import { AuthGuard } from './auth.guard';
 import { PresentationComponent } from './components/presentation/presentation.component';
 import { DashboardComponent } from './components/dashboard/dahsboard.component';
 import { LessonDetailsComponent } from './components/lesson-details/lesson-details.component';
@@ -22,8 +23,6 @@ import { AuthenticationService } from './services/authentication.service';
 import { UserService } from './services/user.service';
 import { LessonService } from './services/lesson.service';
 import { VideoSessionService } from './services/video-session.service';
-import { AuthGuard } from './auth.guard';
-
 
 @NgModule({
   declarations: [
@@ -38,10 +37,11 @@ import { AuthGuard } from './auth.guard';
   ],
   imports: [
     BrowserModule,
+    BrowserAnimationsModule,
     FormsModule,
     HttpModule,
     MaterialModule,
-    FlexLayoutModule.forRoot(),
+    FlexLayoutModule,
     routing,
   ],
   providers: [

@@ -5,8 +5,8 @@
 
     <div fxLayout="column" fxLayoutAlign="space-around center">
 
-      <md-card>
-        <md-card-content>
+      <mat-card>
+        <mat-card-content>
 
           <div *ngIf="submitProcessing" class="cssload-container">
             <div class="cssload-tube-tunnel"></div>
@@ -15,50 +15,49 @@
           <form #myForm (ngSubmit)="onSubmit()" [class.filtered]="submitProcessing">
 
             <div>
-              <md-input-container>
-                <input mdInput placeholder="Email" [(ngModel)]="email" name="email" id="email" type="email" required>
-              </md-input-container>
+              <mat-input-container>
+                <input matInput placeholder="Email" [(ngModel)]="email" name="email" id="email" type="email" required>
+              </mat-input-container>
             </div>
 
             <div *ngIf="!loginView">
-              <md-input-container>
-                <input mdInput placeholder="Name" [(ngModel)]="nickName" name="nickName" id="nickName" type="text" autocomplete="off" required>
-              </md-input-container>
+              <mat-input-container>
+                <input matInput placeholder="Name" [(ngModel)]="nickName" name="nickName" id="nickName" type="text" autocomplete="off" required>
+              </mat-input-container>
             </div>
 
             <div>
-              <md-input-container>
-                <input mdInput placeholder="Password" [(ngModel)]="password" name="password" id="password" type="password" required>
-              </md-input-container>
+              <mat-input-container>
+                <input matInput placeholder="Password" [(ngModel)]="password" name="password" id="password" type="password" required>
+              </mat-input-container>
             </div>
 
             <div *ngIf="!loginView">
-              <md-input-container>
-                <input mdInput placeholder="Confirm password" [(ngModel)]="confirmPassword" name="confirmPassword" id="confirmPassword" type="password"
+              <mat-input-container>
+                <input matInput placeholder="Confirm password" [(ngModel)]="confirmPassword" name="confirmPassword" id="confirmPassword" type="password"
                   autocomplete="off" required>
-              </md-input-container>
+              </mat-input-container>
             </div>
 
             <div *ngIf="!loginView" class="radio-button-div">
               <span id="sign-up-as">Sign up as...</span>
-              <md-radio-group [(ngModel)]="roleUserSignup" name="roleUserSignup" id="roleUserSignup">
-                <md-radio-button value='student'>Student</md-radio-button>
-                <md-radio-button value='teacher'>Teacher</md-radio-button>
-              </md-radio-group>
+              <mat-radio-group [(ngModel)]="roleUserSignup" name="roleUserSignup" id="roleUserSignup">
+                <mat-radio-button value='student'>Student</mat-radio-button>
+                <mat-radio-button value='teacher'>Teacher</mat-radio-button>
+              </mat-radio-group>
             </div>
 
             <app-error-message *ngIf="fieldsIncorrect" (eventShowable)="fieldsIncorrect = false" [errorTitle]="errorTitle" [errorContent]="errorContent"
               [customClass]="customClass" [closable]="true"></app-error-message>
 
             <div class="btn-container">
-              <button md-raised-button color="accent" type="submit" *ngIf="loginView" id="log-in-btn">Log in</button>
-              <button md-icon-button *ngIf="loginView" type="button" (click)="tableShow=!tableShow" mdTooltip="Show registered users" mdTooltipPosition="right"><md-icon>info_outline</md-icon></button>
-              <button md-raised-button color="primary" type="submit" *ngIf="!loginView" id="sign-up-btn">Sign up</button>
+              <button mat-raised-button color="accent" type="submit" *ngIf="loginView" id="log-in-btn">Log in</button>
+              <button mat-raised-button color="primary" type="submit" *ngIf="!loginView" id="sign-up-btn">Sign up</button>
             </div>
 
           </form>
 
-          <div *ngIf="loginView && tableShow">
+          <div *ngIf="loginView">
             <table>
               <tr>
                 <th>Email</th>
@@ -79,14 +78,14 @@
             </table>
           </div>
 
-        </md-card-content>
+        </mat-card-content>
 
-        <md-card-actions>
-          <div *ngIf="loginView">Not registered yet?<button md-button (click)="setLoginView(false); tableShow=false; myForm.reset()" class="card-button">Sign up</button></div>
-          <div *ngIf="!loginView">Already registered?<button md-button (click)="setLoginView(true); myForm.reset()" class="card-button">Log in</button></div>
-        </md-card-actions>
+        <mat-card-actions>
+          <div *ngIf="loginView">Not registered yet?<button mat-button (click)="setLoginView(false); myForm.reset()" class="card-button">Sign up</button></div>
+          <div *ngIf="!loginView">Already registered?<button mat-button (click)="setLoginView(true); myForm.reset()" class="card-button">Log in</button></div>
+        </mat-card-actions>
 
-      </md-card>
+      </mat-card>
 
     </div>
 

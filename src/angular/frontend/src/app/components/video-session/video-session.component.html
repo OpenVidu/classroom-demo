@@ -1,8 +1,8 @@
 <div id="header-div">
-    <md-icon id="back-btn" (click)="location.back()" [title]="'Back to lessons'">keyboard_arrow_left</md-icon>
-    <md-icon class="right-btn" (click)="toggleFullScreen()" [title]="'Fullscreen'">{{fullscreenIcon}}</md-icon>
-    <md-icon class="right-btn" (click)="toggleLocalVideo()" [title]="'Toggle video'">{{videoIcon}}</md-icon>
-    <md-icon class="right-btn" (click)="toggleLocalAudio()" [title]="'Toggle audio'">{{audioIcon}}</md-icon>
+    <mat-icon id="back-btn" (click)="location.back()" [title]="'Back to lessons'">keyboard_arrow_left</mat-icon>
+    <mat-icon class="right-btn" (click)="toggleFullScreen()" [title]="'Fullscreen'">{{fullscreenIcon}}</mat-icon>
+    <mat-icon class="right-btn" (click)="toggleLocalVideo()" [title]="'Toggle video'">{{videoIcon}}</mat-icon>
+    <mat-icon class="right-btn" (click)="toggleLocalAudio()" [title]="'Toggle audio'">{{audioIcon}}</mat-icon>
     <h1>{{lesson?.title}}</h1>
 </div>
 <div id="publisher"></div>

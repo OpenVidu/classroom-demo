@@ -14,26 +14,31 @@ const appRoutes: Routes = [
     path: '',
     component: PresentationComponent,
     pathMatch: 'full',
+    data: { state: 'presentation' }
   },
   {
     path: 'lessons',
     component: DashboardComponent,
-    canActivate: [AuthGuard]
+    canActivate: [AuthGuard],
+    data: { state: 'lessons' }
   },
   {
     path: 'lesson-details/:id',
     component: LessonDetailsComponent,
-    canActivate: [AuthGuard]
+    canActivate: [AuthGuard],
+    data: { state: 'lesson-details' }
   },
   {
     path: 'profile',
     component: ProfileComponent,
-    canActivate: [AuthGuard]
+    canActivate: [AuthGuard],
+    data: { state: 'profile' }
   },
   {
     path: 'lesson/:id',
     component: VideoSessionComponent,
-    canActivate: [AuthGuard]
+    canActivate: [AuthGuard],
+    data: { state: 'session' }
   },
 ];
 

@@ -1,6 +1,6 @@
 import { Component, OnInit, EventEmitter } from '@angular/core';
 import { Router } from '@angular/router';
-import { MdDialog, MdDialogRef, MdSnackBar } from '@angular/material';
+import { MatDialog, MatDialogRef, MatSnackBar } from '@angular/material';
 
 import { Lesson } from '../../models/lesson';
 
@@ -9,6 +9,7 @@ import { VideoSessionService } from '../../services/video-session.service';
 import { AuthenticationService } from '../../services/authentication.service';
 
 import { JoinSessionDialogComponent } from './join-session-dialog.component';
+import { PublisherProperties } from 'openvidu-browser';
 
 @Component({
     selector: 'app-dashboard',
@@ -28,8 +29,8 @@ export class DashboardComponent implements OnInit {
         private videoSessionService: VideoSessionService,
         private authenticationService: AuthenticationService,
         private router: Router,
-        public snackBar: MdSnackBar,
-        public dialog: MdDialog
+        public snackBar: MatSnackBar,
+        public dialog: MatDialog
     ) { }
 
     ngOnInit(): void {
@@ -53,12 +54,12 @@ export class DashboardComponent implements OnInit {
     }
 
     goToLesson(lesson: Lesson) {
-        let dialogRef: MdDialogRef<JoinSessionDialogComponent>;
+        let dialogRef: MatDialogRef<JoinSessionDialogComponent>;
         dialogRef = this.dialog.open(JoinSessionDialogComponent);
         dialogRef.componentInstance.myReference = dialogRef;
 
-        dialogRef.afterClosed().subscribe(cameraOptions => {
-            if (cameraOptions != null) {
+        dialogRef.afterClosed().subscribe((cameraOptions: PublisherProperties) => {
+            if (!!cameraOptions) {
                 console.log('Joining session with options:');
                 console.log(cameraOptions);
                 this.videoSessionService.lesson = lesson;
@@ -92,10 +93,10 @@ export class DashboardComponent implements OnInit {
         );
     }
 
-    createSession(lessonId: number){
+    createSession(lessonId: number) {
         this.videoSessionService.createSession(lessonId).subscribe(
-            response => {
-                console.log(response.text());
+            () => {
+                console.log('Session created');
             },
             error => {
                 console.log(error);

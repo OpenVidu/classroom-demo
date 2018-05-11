@@ -31,12 +31,12 @@ export class AuthenticationService {
 
         console.log('Login service started...');
 
-        let userPass = utf8_to_b64(user + ':' + pass);
-        let headers = new Headers({
+        const userPass = utf8_to_b64(user + ':' + pass);
+        const headers = new Headers({
             'Authorization': 'Basic ' + userPass,
             'X-Requested-With': 'XMLHttpRequest'
         });
-        let options = new RequestOptions({ headers });
+        const options = new RequestOptions({ headers });
 
         return this.http.get(this.urlLogIn, options)
             .map(response => {
@@ -72,7 +72,7 @@ export class AuthenticationService {
     directLogOut() {
         this.logOut().subscribe(
             response => { },
-            error => console.log("Error when trying to log out: " + error)
+            error => console.log('Error when trying to log out: ' + error)
         );
     }
 
@@ -97,15 +97,15 @@ export class AuthenticationService {
 
         console.log('ReqIsLogged called');
 
-        let headers = new Headers({
+        const headers = new Headers({
             'X-Requested-With': 'XMLHttpRequest'
         });
-        let options = new RequestOptions({ headers });
+        const options = new RequestOptions({ headers });
 
         this.http.get(this.urlLogIn, options).subscribe(
             response => this.processLogInResponse(response),
             error => {
-                if (error.status != 401) {
+                if (error.status !== 401) {
                     console.error('Error when asking if logged: ' + JSON.stringify(error));
                     this.logOut();
                 }

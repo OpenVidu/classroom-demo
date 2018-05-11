@@ -3,11 +3,11 @@ h1 {
   display: block;
 }
 
-md-input-container {
+mat-input-container {
   width: 100%;
 }
 
-md-card-actions {
+mat-card-actions {
   padding-left: 10px;
   padding-right: 10px;
   color: #9e9e9e;
@@ -36,5 +36,6 @@ md-card-actions {
 
 table {
   margin: 0 auto;
-  margin-top: 20px;
+  margin-top: 30px;
+  text-align: left;
 }

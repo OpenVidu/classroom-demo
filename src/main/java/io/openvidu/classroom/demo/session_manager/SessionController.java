@@ -71,29 +71,21 @@ public class SessionController {
 		if (!checkAuthorization(c, c.getTeacher())){
 			return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
 		}
-		
-		JSONObject responseJson = new JSONObject();
-		
+				
 		if(this.lessonIdSession.get(id_lesson) != null) {
 			// If there's already a valid sessionId for this lesson, not necessary to ask for a new one 
-			responseJson.put(0, this.lessonIdSession.get(id_lesson).getSessionId());
-			return new ResponseEntity<>(responseJson, HttpStatus.OK);
+			return new ResponseEntity<>(HttpStatus.OK);
 		}
 		else {
 			try {
-				// IMPORTANT STUFF
 				Session session = this.openVidu.createSession();
-				String sessionId = session.getSessionId();
-				// END IMPORTANT STUFF
 				
 				this.lessonIdSession.put(id_lesson, session);
-				this.sessionIdUserIdToken.put(sessionId, new HashMap<>());
+				this.sessionIdUserIdToken.put(session.getSessionId(), new HashMap<>());
 				
 				showMap();
-				
-				responseJson.put(0, sessionId);
-				
-				return new ResponseEntity<>(responseJson, HttpStatus.OK);
+								
+				return new ResponseEntity<>(HttpStatus.OK);
 			} catch (Exception e) {
 				return getErrorResponse(e);
 			}
@@ -142,8 +134,7 @@ public class SessionController {
 			
 			this.sessionIdUserIdToken.get(session.getSessionId()).put(this.user.getLoggedUser().getId(), token);
 			
-			responseJson.put(0, session.getSessionId());
-			responseJson.put(1, token);
+			responseJson.put(0, token);
 			
 			showMap();
 			

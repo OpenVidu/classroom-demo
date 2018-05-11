@@ -1,6 +1,6 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
 import { Location } from '@angular/common';
-import { OpenVidu, Session, Publisher } from 'openvidu-browser';
+import { OpenVidu, Session, Publisher, StreamEvent, ConnectionEvent, PublisherProperties } from 'openvidu-browser';
 
 import { VideoSessionService } from '../../services/video-session.service';
 import { AuthenticationService } from '../../services/authentication.service';
@@ -12,7 +12,7 @@ import { Lesson } from '../../models/lesson';
     templateUrl: './video-session.component.html',
     styleUrls: ['./video-session.component.css']
 })
-export class VideoSessionComponent implements OnInit {
+export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit  {
 
     lesson: Lesson;
 
@@ -20,10 +20,9 @@ export class VideoSessionComponent implements OnInit {
     session: Session;
     publisher: Publisher;
 
-    sessionId: string;
     token: string;
 
-    cameraOptions: any;
+    cameraOptions: PublisherProperties;
 
     localVideoActivated: boolean;
     localAudioActivated: boolean;
@@ -39,78 +38,69 @@ export class VideoSessionComponent implements OnInit {
 
     OPEN_VIDU_CONNECTION() {
 
-        // 0) Obtain 'sessionId' and 'token' from server
+        // 0) Obtain 'token' from server
         // In this case, the method ngOnInit takes care of it
 
 
         // 1) Initialize OpenVidu and your Session
         this.OV = new OpenVidu();
-        this.session = this.OV.initSession(this.sessionId);
+        this.session = this.OV.initSession();
 
 
         // 2) Specify the actions when events take place
-        this.session.on('streamCreated', (event) => {
-            console.warn("STREAM CREATED!");
+        this.session.on('streamCreated', (event: StreamEvent) => {
+            console.warn('STREAM CREATED!');
             console.warn(event.stream);
             this.session.subscribe(event.stream, 'subscriber', {
-                insertMode: 'append',
-                width: '100%',
-                height: '100%'
+                insertMode: 'APPEND'
             });
         });
 
-        this.session.on('streamDestroyed', (event) => {
-            console.warn("STREAM DESTROYED!");
+        this.session.on('streamDestroyed', (event: StreamEvent) => {
+            console.warn('STREAM DESTROYED!');
             console.warn(event.stream);
         });
 
-        this.session.on('connectionCreated', (event) => {
-            if (event.connection.connectionId == this.session.connection.connectionId) {
-                console.warn("YOUR OWN CONNECTION CREATED!");
+        this.session.on('connectionCreated', (event: ConnectionEvent) => {
+            if (event.connection.connectionId === this.session.connection.connectionId) {
+                console.warn('YOUR OWN CONNECTION CREATED!');
             } else {
-                console.warn("OTHER USER'S CONNECTION CREATED!");
+                console.warn('OTHER USER\'S CONNECTION CREATED!');
             }
             console.warn(event.connection);
         });
 
-        this.session.on('connectionDestroyed', (event) => {
-            console.warn("OTHER USER'S CONNECTION DESTROYED!");
+        this.session.on('connectionDestroyed', (event: ConnectionEvent) => {
+            console.warn('OTHER USER\'S CONNECTION DESTROYED!');
             console.warn(event.connection);
         });
 
 
-
         // 3) Connect to the session
-        this.session.connect(this.token, "CLIENT:" + this.authenticationService.getCurrentUser().name, (error) => {
-
-            // If the connection is successful, initialize a publisher and publish to the session
-            if (!error) {
-
+        this.session.connect(this.token, 'CLIENT:' + this.authenticationService.getCurrentUser().name)
+            .then(() => {
                 if (this.authenticationService.isTeacher()) {
 
                     // 4) Get your own camera stream with the desired resolution and publish it, only if the user is supposed to do so
                     this.publisher = this.OV.initPublisher('publisher', this.cameraOptions);
 
                     this.publisher.on('accessAllowed', () => {
-                        console.warn("CAMERA ACCESS ALLOWED!");
+                        console.warn('CAMERA ACCESS ALLOWED!');
                     });
                     this.publisher.on('accessDenied', () => {
-                        console.warn("CAMERA ACCESS DENIED!");
+                        console.warn('CAMERA ACCESS DENIED!');
                     });
-                    this.publisher.on('streamCreated', (event) => {
-                        console.warn("STREAM CREATED BY PUBLISHER!");
+                    this.publisher.on('streamCreated', (event: StreamEvent) => {
+                        console.warn('STREAM CREATED BY PUBLISHER!');
                         console.warn(event.stream);
                     })
 
                     // 5) Publish your stream
                     this.session.publish(this.publisher);
-
                 }
-
-            } else {
+            }).catch(error => {
                 console.log('There was an error connecting to the session:', error.code, error.message);
-            }
-        });
+            });
     }
 
 
@@ -124,13 +114,11 @@ export class VideoSessionComponent implements OnInit {
 
             // If the user is the teacher: creates the session and gets a token (with PUBLISHER role)
             this.videoSessionService.createSession(this.lesson.id).subscribe(
-                sessionId => { // {0: sessionId}
-                    this.sessionId = sessionId[0];
+                () => {
                     this.videoSessionService.generateToken(this.lesson.id).subscribe(
-                        sessionIdAndToken => {
-                            this.token = sessionIdAndToken[1];
-                            console.warn("Token: " + this.token);
-                            console.warn("SessionId: " + this.sessionId);
+                        response => {
+                            this.token = response[0];
+                            console.warn('Token: ' + this.token);
                             this.OPEN_VIDU_CONNECTION();
                         },
                         error => {
@@ -141,16 +129,13 @@ export class VideoSessionComponent implements OnInit {
                     console.log(error);
                 }
             );
-        }
-        else {
+        } else {
 
             // If the user is a student: gets a token (with SUBSCRIBER role)
             this.videoSessionService.generateToken(this.lesson.id).subscribe(
-                sessionIdAndToken => { // {0: sessionId, 1: token}
-                    this.sessionId = sessionIdAndToken[0];
-                    this.token = sessionIdAndToken[1];
-                    console.warn("Token: " + this.token);
-                    console.warn("SessionId: " + this.sessionId);
+                response => { // {0: token}
+                    this.token = response[0];
+                    console.warn('Token: ' + this.token);
                     this.OPEN_VIDU_CONNECTION();
                 },
                 error => {
@@ -164,24 +149,24 @@ export class VideoSessionComponent implements OnInit {
     }
 
     ngAfterViewInit() {
-        this.toggleScrollPage("hidden");
+        this.toggleScrollPage('hidden');
     }
 
     ngOnDestroy() {
         this.videoSessionService.removeUser(this.lesson.id).subscribe(
             response => {
-                console.warn("You have succesfully left the lesson");
+                console.warn('You have succesfully left the lesson');
             },
             error => {
                 console.log(error);
             });
-        this.toggleScrollPage("auto");
+        this.toggleScrollPage('auto');
         this.exitFullScreen();
-        if (this.OV) this.session.disconnect();
+        if (this.OV) { this.session.disconnect(); }
     }
 
     toggleScrollPage(scroll: string) {
-        let content = <HTMLElement>document.getElementsByClassName("mat-sidenav-content")[0];
+        const content = <HTMLElement>document.getElementsByClassName('mat-sidenav-content')[0];
         content.style.overflow = scroll;
     }
 
@@ -198,13 +183,13 @@ export class VideoSessionComponent implements OnInit {
     }
 
     toggleFullScreen() {
-        let document: any = window.document;
-        let fs = document.getElementsByTagName('html')[0];
+        const document: any = window.document;
+        const fs = document.getElementsByTagName('html')[0];
         if (!document.fullscreenElement &&
             !document.mozFullScreenElement &&
             !document.webkitFullscreenElement &&
             !document.msFullscreenElement) {
-            console.log("enter FULLSCREEN!");
+            console.log('enter FULLSCREEN!');
             this.fullscreenIcon = 'fullscreen_exit';
             if (fs.requestFullscreen) {
                 fs.requestFullscreen();
@@ -216,7 +201,7 @@ export class VideoSessionComponent implements OnInit {
                 fs.webkitRequestFullscreen();
             }
         } else {
-            console.log("exit FULLSCREEN!");
+            console.log('exit FULLSCREEN!');
             this.fullscreenIcon = 'fullscreen';
             if (document.exitFullscreen) {
                 document.exitFullscreen();
@@ -231,8 +216,8 @@ export class VideoSessionComponent implements OnInit {
     }
 
     exitFullScreen() {
-        let document: any = window.document;
-        let fs = document.getElementsByTagName('html')[0];
+        const document: any = window.document;
+        const fs = document.getElementsByTagName('html')[0];
         if (document.exitFullscreen) {
             document.exitFullscreen();
         } else if (document.msExitFullscreen) {
@@ -250,11 +235,11 @@ export class VideoSessionComponent implements OnInit {
     }
 
     afterConnectionStuff() {
-        this.localVideoActivated = this.cameraOptions.video;
-        this.localAudioActivated = this.cameraOptions.audio;
-        this.videoIcon = this.localVideoActivated ? "videocam" : "videocam_off";
-        this.audioIcon = this.localAudioActivated ? "mic" : "mic_off";
-        this.fullscreenIcon = "fullscreen";
+        this.localVideoActivated = this.cameraOptions.videoSource !== false;
+        this.localAudioActivated = this.cameraOptions.audioSource !== false;
+        this.videoIcon = this.localVideoActivated ? 'videocam' : 'videocam_off';
+        this.audioIcon = this.localAudioActivated ? 'mic' : 'mic_off';
+        this.fullscreenIcon = 'fullscreen';
     }
 
 }

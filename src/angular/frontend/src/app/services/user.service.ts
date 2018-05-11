@@ -12,15 +12,15 @@ export class UserService {
   constructor(private http: Http) { }
 
   newUser(name: string, pass: string, nickName: string, role: string) {
-    let body = JSON.stringify([name, pass, nickName, role]);
-    let headers = new Headers({
+    const body = JSON.stringify([name, pass, nickName, role]);
+    const headers = new Headers({
       'Content-Type': 'application/json',
       'X-Requested-With': 'XMLHttpRequest'
     });
-    let options = new RequestOptions({ headers });
-    return this.http.post(this.url + "/new", body, options)
-    .map(response => response.json() as User)
-    .catch(error => this.handleError(error));
+    const options = new RequestOptions({ headers });
+    return this.http.post(this.url + '/new', body, options)
+      .map(response => response.json() as User)
+      .catch(error => this.handleError(error));
   }
 
   private handleError(error: any) {
