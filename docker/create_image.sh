@@ -5,7 +5,7 @@ cp ../../openvidu/openvidu-server/target/openvidu-server-"$1".jar ./openvidu-ser
 
 cd ../src/angular/frontend
 
-ng build --environment=container --output-path ../../main/resources/static
+ng build --configuration=container --output-path ../../main/resources/static
 
 cd ../../../
 
