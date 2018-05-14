@@ -84,6 +84,10 @@ mat-icon:hover {
   width: 100%;
 }
 
+mat-radio-button {
+  padding-right: 10px !important;
+}
+
 
 /* Colors of Deep Purple Material Theme */
 

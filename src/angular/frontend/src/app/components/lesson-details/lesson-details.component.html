@@ -9,9 +9,9 @@
 
     <div *ngIf="editingTitle" fxLayout="row" fxLayoutAlign="start center">
       <form #editLessonForm (ngSubmit)="editLesson(); editLessonForm.reset()" [class.filtered]="sumbitEditLesson">
-        <mat-input-container>
+        <mat-form-field>
           <input matInput placeholder="Title" [(ngModel)]="titleEdited" name="lessonTitle" type="text" autocomplete="off" required>
-        </mat-input-container>
+        </mat-form-field>
         <div class="block-btn">
           <button mat-button type="submit" [disabled]="sumbitEditLesson">Send</button>
           <button mat-button (click)="editingTitle = false; titleEdited = ''" [disabled]="sumbitEditLesson">Cancel</button>
@@ -22,9 +22,9 @@
 
     <form #addAttendersForm (ngSubmit)="addLessonAttenders(); addAttendersForm.reset()" [class.filtered]="sumbitAddAttenders">
       <h4 id="new-attender-title">New attender</h4>
-      <mat-input-container>
+      <mat-form-field>
         <input matInput placeholder="Email" [(ngModel)]="emailAttender" name="attenderEmail" type="text" autocomplete="off" required>
-      </mat-input-container>
+      </mat-form-field>
       <div class="block-btn">
         <button mat-button type="submit" [disabled]="sumbitAddAttenders">Send</button>
         <button mat-button (click)="addAttendersForm.reset()" [disabled]="sumbitAddAttenders || emailAttender == null">Cancel</button>

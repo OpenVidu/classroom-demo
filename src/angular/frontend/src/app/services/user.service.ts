@@ -1,6 +1,8 @@
+import { throwError as observableThrowError, Observable } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
+
 import { Injectable } from '@angular/core';
 import { Http, Headers, RequestOptions, Response } from '@angular/http';
-import { Observable } from 'rxjs/Observable';
 
 import { User } from '../models/user';
 
@@ -19,11 +21,13 @@ export class UserService {
     });
     const options = new RequestOptions({ headers });
     return this.http.post(this.url + '/new', body, options)
-      .map(response => response.json() as User)
-      .catch(error => this.handleError(error));
+      .pipe(
+        map(response => response.json() as User),
+        catchError(error => this.handleError(error))
+      );
   }
 
   private handleError(error: any) {
-    return Observable.throw(error.status);
+    return observableThrowError(error.status);
   }
 }

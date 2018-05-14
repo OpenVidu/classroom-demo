@@ -1,6 +1,8 @@
+import { throwError as observableThrowError, Observable } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
+
 import { Injectable } from '@angular/core';
 import { Http, Headers, RequestOptions } from '@angular/http';
-import { Observable } from 'rxjs/Observable';
 
 import { Lesson } from '../models/lesson';
 
@@ -21,8 +23,10 @@ export class VideoSessionService {
     createSession(lessonId: number) {
         const body = JSON.stringify(lessonId);
         return this.http.post(this.url + '/create-session', body)
-            .map(response => {})
-            .catch(error => this.handleError(error));
+            .pipe(
+                map(response => { }),
+                catchError(error => this.handleError(error))
+            );
     }
 
     // Returns {0: sessionId, 1: token}
@@ -31,8 +35,10 @@ export class VideoSessionService {
         const headers = new Headers({ 'Content-Type': 'application/json' });
         const options = new RequestOptions({ headers });
         return this.http.post(this.url + '/generate-token', body, options)
-            .map(response => response.json())
-            .catch(error => this.handleError(error));
+            .pipe(
+                map(response => response.json()),
+                catchError(error => this.handleError(error))
+            );
     }
 
     removeUser(lessonId: number) {
@@ -40,13 +46,15 @@ export class VideoSessionService {
         const headers = new Headers({ 'Content-Type': 'application/json' });
         const options = new RequestOptions({ headers });
         return this.http.post(this.url + '/remove-user', body, options)
-            .map(response => response)
-            .catch(error => this.handleError(error));
+            .pipe(
+                map(response => response),
+                catchError(error => this.handleError(error))
+            );
     }
 
     private handleError(error: any) {
         console.error(error);
-        return Observable.throw('Server error (' + error.status + '): ' + error.text())
+        return observableThrowError('Server error (' + error.status + '): ' + error.text())
     }
 
 }

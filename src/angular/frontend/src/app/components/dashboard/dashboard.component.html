@@ -14,10 +14,10 @@
     <div *ngIf="addingLesson">
       <div>NEW LESSON</div>
       <form #newLessonForm (ngSubmit)="newLesson(); newLessonForm.reset()" [class.filtered]="sumbitNewLesson">
-        <mat-input-container>
+        <mat-form-field>
           <input matInput placeholder="Title" [(ngModel)]="lessonTitle" name="lessonTitle" id="lessonTitle" type="text" autocomplete="off"
             required>
-        </mat-input-container>
+        </mat-form-field>
         <div class="block-btn">
           <button mat-button type="submit" [disabled]="sumbitNewLesson">Send</button>
           <button mat-button (click)="addingLesson = false; newLessonForm.reset()" [disabled]="sumbitNewLesson">Cancel</button>

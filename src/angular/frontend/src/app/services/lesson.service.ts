@@ -1,6 +1,8 @@
+import { throwError as observableThrowError, Observable } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
+
 import { Injectable } from '@angular/core';
 import { Http, Headers, RequestOptions, Response } from '@angular/http';
-import { Observable } from 'rxjs/Observable';
 import { environment } from '../../environments/environment';
 
 import { Lesson } from '../models/lesson';
@@ -20,16 +22,20 @@ export class LessonService {
         const headers = new Headers({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.authenticationService.token });
         const options = new RequestOptions({ headers });
         return this.http.get(this.url + '/user/' + user.id, options) // Must send userId
-            .map((response: Response) => response.json() as Lesson[])
-            .catch(error => this.handleError(error));
+            .pipe(
+                map((response: Response) => response.json() as Lesson[]),
+                catchError(error => this.handleError(error))
+            );
     }
 
     getLesson(lessonId: number) {
         const headers = new Headers({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.authenticationService.token });
         const options = new RequestOptions({ headers });
         return this.http.get(this.url + '/lesson/' + lessonId, options) // Must send userId
-            .map((response: Response) => response.json() as Lesson)
-            .catch(error => this.handleError(error));
+            .pipe(
+                map((response: Response) => response.json() as Lesson),
+                catchError(error => this.handleError(error))
+            );
     }
 
     // POST new lesson. On success returns the created lesson
@@ -41,8 +47,10 @@ export class LessonService {
         });
         const options = new RequestOptions({ headers });
         return this.http.post(this.url + '/new', body, options)
-            .map(response => response.json() as Lesson)
-            .catch(error => this.handleError(error));
+            .pipe(
+                map(response => response.json() as Lesson),
+                catchError(error => this.handleError(error))
+            );
     }
 
     // PUT existing lesson. On success returns the updated lesson
@@ -51,8 +59,10 @@ export class LessonService {
         const headers = new Headers({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.authenticationService.token });
         const options = new RequestOptions({ headers });
         return this.http.put(this.url + '/edit', body, options)
-            .map(response => response.json() as Lesson)
-            .catch(error => this.handleError(error));
+            .pipe(
+                map(response => response.json() as Lesson),
+                catchError(error => this.handleError(error))
+            );
     }
 
     // DELETE existing lesson. On success returns the deleted lesson (simplified version)
@@ -60,8 +70,10 @@ export class LessonService {
         const headers = new Headers({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.authenticationService.token });
         const options = new RequestOptions({ headers });
         return this.http.delete(this.url + '/delete/' + lessonId, options)
-            .map(response => response.json() as Lesson)
-            .catch(error => this.handleError(error));
+            .pipe(
+                map(response => response.json() as Lesson),
+                catchError(error => this.handleError(error))
+            );
     }
 
     // PUT existing lesson, modifying its attenders (adding them). On success returns the updated lesson.attenders array
@@ -70,8 +82,10 @@ export class LessonService {
         const headers = new Headers({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.authenticationService.token });
         const options = new RequestOptions({ headers });
         return this.http.put(this.url + '/edit/add-attenders/lesson/' + lessonId, body, options)
-            .map(response => response.json())
-            .catch(error => this.handleError(error));
+            .pipe(
+                map(response => response.json()),
+                catchError(error => this.handleError(error))
+            );
     }
 
     // PUT existing lesson, modifying its attenders (deleting them). On success returns the updated lesson.attenders array
@@ -80,8 +94,10 @@ export class LessonService {
         const headers = new Headers({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.authenticationService.token });
         const options = new RequestOptions({ headers });
         return this.http.put(this.url + '/edit/delete-attenders', body, options)
-            .map(response => response.json() as User[])
-            .catch(error => this.handleError(error));
+            .pipe(
+                map(response => response.json() as User[]),
+                catchError(error => this.handleError(error))
+            );
     }
 
     obtainLocalLesson(id: number) {
@@ -90,6 +106,6 @@ export class LessonService {
 
     private handleError(error: any) {
         console.error(error);
-        return Observable.throw('Server error (' + error.status + '): ' + error.text())
+        return observableThrowError('Server error (' + error.status + '): ' + error.text())
     }
 }

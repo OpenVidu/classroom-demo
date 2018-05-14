@@ -1,11 +1,11 @@
-import { Observable } from 'rxjs/Rx';
+import { throwError as observableThrowError, Observable } from 'rxjs';
+import { map, catchError } from 'rxjs/operators';
+
 import { Injectable } from '@angular/core';
 import { Http, RequestOptions, Headers, Response } from '@angular/http';
 import { Router } from '@angular/router';
 
 import { environment } from '../../environments/environment';
-
-import 'rxjs/add/operator/map';
 
 import { User } from '../models/user';
 
@@ -39,34 +39,37 @@ export class AuthenticationService {
         const options = new RequestOptions({ headers });
 
         return this.http.get(this.urlLogIn, options)
-            .map(response => {
-                this.processLogInResponse(response);
-                return this.user;
-            })
-            .catch(error => Observable.throw(error));
+            .pipe(
+                map(response => {
+                    this.processLogInResponse(response);
+                    return this.user;
+                }),
+                catchError(error => Observable.throw(error))
+            );
     }
 
     logOut() {
 
         console.log('Logging out...');
 
-        return this.http.get(this.urlLogOut).map(
-            response => {
+        return this.http.get(this.urlLogOut)
+            .pipe(
+                map(response => {
+                    console.log('Logout succesful!');
 
-                console.log('Logout succesful!');
+                    this.user = null;
+                    this.role = null;
 
-                this.user = null;
-                this.role = null;
+                    // clear token remove user from local storage to log user out and navigates to welcome page
+                    this.token = null;
+                    localStorage.removeItem('login');
+                    localStorage.removeItem('rol');
+                    this.router.navigate(['']);
 
-                // clear token remove user from local storage to log user out and navigates to welcome page
-                this.token = null;
-                localStorage.removeItem('login');
-                localStorage.removeItem('rol');
-                this.router.navigate(['']);
-
-                return response;
-            })
-            .catch(error => Observable.throw(error));
+                    return response;
+                }),
+                catchError(error => Observable.throw(error))
+            );
     }
 
     directLogOut() {
@@ -102,15 +105,17 @@ export class AuthenticationService {
         });
         const options = new RequestOptions({ headers });
 
-        this.http.get(this.urlLogIn, options).subscribe(
-            response => this.processLogInResponse(response),
-            error => {
-                if (error.status !== 401) {
-                    console.error('Error when asking if logged: ' + JSON.stringify(error));
-                    this.logOut();
-                }
-            }
-        );
+        this.http.get(this.urlLogIn, options)
+            .pipe(
+                map(response => this.processLogInResponse(response)),
+                catchError(error => {
+                    if (error.status !== 401) {
+                        console.error('Error when asking if logged: ' + JSON.stringify(error));
+                        this.logOut();
+                        return Observable.throw(error);
+                    }
+                })
+            );
     }
 
     checkCredentials() {

@@ -15,28 +15,28 @@
           <form #myForm (ngSubmit)="onSubmit()" [class.filtered]="submitProcessing">
 
             <div>
-              <mat-input-container>
+              <mat-form-field>
                 <input matInput placeholder="Email" [(ngModel)]="email" name="email" id="email" type="email" required>
-              </mat-input-container>
+              </mat-form-field>
             </div>
 
             <div *ngIf="!loginView">
-              <mat-input-container>
+              <mat-form-field>
                 <input matInput placeholder="Name" [(ngModel)]="nickName" name="nickName" id="nickName" type="text" autocomplete="off" required>
-              </mat-input-container>
+              </mat-form-field>
             </div>
 
             <div>
-              <mat-input-container>
+              <mat-form-field>
                 <input matInput placeholder="Password" [(ngModel)]="password" name="password" id="password" type="password" required>
-              </mat-input-container>
+              </mat-form-field>
             </div>
 
             <div *ngIf="!loginView">
-              <mat-input-container>
+              <mat-form-field>
                 <input matInput placeholder="Confirm password" [(ngModel)]="confirmPassword" name="confirmPassword" id="confirmPassword" type="password"
                   autocomplete="off" required>
-              </mat-input-container>
+              </mat-form-field>
             </div>
 
             <div *ngIf="!loginView" class="radio-button-div">
