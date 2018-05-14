@@ -3,7 +3,7 @@ version: '2'
 services:
 
   demo-mysql:
-    image: mysql:latest
+    image: mysql:5.7.21
     environment:
       - MYSQL_ROOT_PASSWORD=pass
       - MYSQL_DATABASE=openvidu_sample_app
