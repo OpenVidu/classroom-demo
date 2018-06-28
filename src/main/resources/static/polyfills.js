@@ -5999,7 +5999,7 @@ window.global = window;
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! /home/pablo/Documents/Git/classroom-demo/src/angular/frontend/src/polyfills.ts */"./src/polyfills.ts");
+module.exports = __webpack_require__(/*! /opt/src/angular/frontend/src/polyfills.ts */"./src/polyfills.ts");
 
 
 /***/ })
