@@ -54,7 +54,7 @@ export class VideoSessionService {
 
     private handleError(error: any) {
         console.error(error);
-        return observableThrowError('Server error (' + error.status + '): ' + error.text())
+        return observableThrowError(error)
     }
 
 }

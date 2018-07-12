@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
 import { Location } from '@angular/common';
+import { MatSnackBar } from '@angular/material';
 import { OpenVidu, Session, Publisher, StreamEvent, ConnectionEvent, PublisherProperties } from 'openvidu-browser';
 
 import { VideoSessionService } from '../../services/video-session.service';
@@ -12,7 +13,7 @@ import { Lesson } from '../../models/lesson';
     templateUrl: './video-session.component.html',
     styleUrls: ['./video-session.component.css']
 })
-export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit  {
+export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit {
 
     lesson: Lesson;
 
@@ -33,7 +34,8 @@ export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit  
     constructor(
         private location: Location,
         private authenticationService: AuthenticationService,
-        private videoSessionService: VideoSessionService) { }
+        private videoSessionService: VideoSessionService,
+        private snackBar: MatSnackBar) { }
 
 
     OPEN_VIDU_CONNECTION() {
@@ -73,6 +75,9 @@ export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit  
         this.session.on('connectionDestroyed', (event: ConnectionEvent) => {
             console.warn('OTHER USER\'S CONNECTION DESTROYED!');
             console.warn(event.connection);
+            if (this.authenticationService.connectionBelongsToTeacher(event.connection)) {
+                this.location.back();
+            }
         });
 
 
@@ -140,6 +145,12 @@ export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit  
                 },
                 error => {
                     console.log(error);
+                    if (error.status === 409) {
+                        this.snackBar.open('The teacher has not opened the lesson yet!', 'Undo', {
+                            duration: 3000
+                        });
+                        this.location.back();
+                    }
                 });
         }
 
@@ -235,10 +246,12 @@ export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit  
     }
 
     afterConnectionStuff() {
-        this.localVideoActivated = this.cameraOptions.videoSource !== false;
-        this.localAudioActivated = this.cameraOptions.audioSource !== false;
-        this.videoIcon = this.localVideoActivated ? 'videocam' : 'videocam_off';
-        this.audioIcon = this.localAudioActivated ? 'mic' : 'mic_off';
+        if (this.authenticationService.isTeacher()) {
+            this.localVideoActivated = this.cameraOptions.publishVideo !== false;
+            this.localAudioActivated = this.cameraOptions.publishAudio !== false;
+            this.videoIcon = this.localVideoActivated ? 'videocam' : 'videocam_off';
+            this.audioIcon = this.localAudioActivated ? 'mic' : 'mic_off';
+        }
         this.fullscreenIcon = 'fullscreen';
     }
 

@@ -374,18 +374,23 @@ var DashboardComponent = /** @class */ (function () {
     };
     DashboardComponent.prototype.goToLesson = function (lesson) {
         var _this = this;
-        var dialogRef;
-        dialogRef = this.dialog.open(_join_session_dialog_component__WEBPACK_IMPORTED_MODULE_7__["JoinSessionDialogComponent"]);
-        dialogRef.componentInstance.myReference = dialogRef;
-        dialogRef.afterClosed().subscribe(function (cameraOptions) {
-            if (!!cameraOptions) {
-                console.log('Joining session with options:');
-                console.log(cameraOptions);
-                _this.videoSessionService.lesson = lesson;
-                _this.videoSessionService.cameraOptions = cameraOptions;
-                _this.router.navigate(['/lesson/' + lesson.id]);
-            }
-        });
+        this.videoSessionService.lesson = lesson;
+        if (this.authenticationService.isTeacher()) {
+            var dialogRef = void 0;
+            dialogRef = this.dialog.open(_join_session_dialog_component__WEBPACK_IMPORTED_MODULE_7__["JoinSessionDialogComponent"]);
+            dialogRef.componentInstance.myReference = dialogRef;
+            dialogRef.afterClosed().subscribe(function (cameraOptions) {
+                if (!!cameraOptions) {
+                    console.log('Joining session with options:');
+                    console.log(cameraOptions);
+                    _this.videoSessionService.cameraOptions = cameraOptions;
+                    _this.router.navigate(['/lesson/' + lesson.id]);
+                }
+            });
+        }
+        else {
+            this.router.navigate(['/lesson/' + lesson.id]);
+        }
     };
     DashboardComponent.prototype.goToLessonDetails = function (lesson) {
         this.router.navigate(['/lesson-details/' + lesson.id]);
@@ -405,20 +410,6 @@ var DashboardComponent = /** @class */ (function () {
             console.log(error);
             _this.sumbitNewLesson = false;
             _this.snackBar.open('There has been a problem...', undefined, { duration: 3000 });
-        });
-    };
-    DashboardComponent.prototype.createSession = function (lessonId) {
-        this.videoSessionService.createSession(lessonId).subscribe(function () {
-            console.log('Session created');
-        }, function (error) {
-            console.log(error);
-        });
-    };
-    DashboardComponent.prototype.generateToken = function (lessonId) {
-        this.videoSessionService.generateToken(lessonId).subscribe(function (response) {
-            console.log(response.text());
-        }, function (error) {
-            console.log(error);
         });
     };
     DashboardComponent = __decorate([
@@ -492,8 +483,8 @@ var JoinSessionDialogComponent = /** @class */ (function () {
     }
     JoinSessionDialogComponent.prototype.joinSession = function () {
         var cameraOptions = {
-            audioSource: (!this.joinWithAudio) ? false : undefined,
-            videoSource: (!this.joinWithVideo) ? false : undefined,
+            publishAudio: (!this.joinWithAudio) ? false : true,
+            publishVideo: (!this.joinWithVideo) ? false : true,
             resolution: this.getResolution()
         };
         this.myReference.close(cameraOptions);
@@ -1091,7 +1082,7 @@ module.exports = "h1 {\n  text-align: center;\n  margin: 0;\n  color: white;\n}\
 /*! no static exports found */
 /***/ (function(module, exports) {
 
-module.exports = "<div id=\"header-div\">\n    <mat-icon id=\"back-btn\" (click)=\"location.back()\" [title]=\"'Back to lessons'\">keyboard_arrow_left</mat-icon>\n    <mat-icon class=\"right-btn\" (click)=\"toggleFullScreen()\" [title]=\"'Fullscreen'\">{{fullscreenIcon}}</mat-icon>\n    <mat-icon class=\"right-btn\" (click)=\"toggleLocalVideo()\" [title]=\"'Toggle video'\">{{videoIcon}}</mat-icon>\n    <mat-icon class=\"right-btn\" (click)=\"toggleLocalAudio()\" [title]=\"'Toggle audio'\">{{audioIcon}}</mat-icon>\n    <h1>{{lesson?.title}}</h1>\n</div>\n<div id=\"publisher\"></div>\n<div id=\"subscriber\"></div>"
+module.exports = "<div id=\"header-div\">\n    <mat-icon id=\"back-btn\" (click)=\"location.back()\" [title]=\"'Back to lessons'\">keyboard_arrow_left</mat-icon>\n    <mat-icon class=\"right-btn\" (click)=\"toggleFullScreen()\" [title]=\"'Fullscreen'\">{{fullscreenIcon}}</mat-icon>\n    <mat-icon *ngIf=\"authenticationService.isTeacher()\" class=\"right-btn\" (click)=\"toggleLocalVideo()\" [title]=\"'Toggle video'\">{{videoIcon}}</mat-icon>\n    <mat-icon *ngIf=\"authenticationService.isTeacher()\" class=\"right-btn\" (click)=\"toggleLocalAudio()\" [title]=\"'Toggle audio'\">{{audioIcon}}</mat-icon>\n    <h1>{{lesson?.title}}</h1>\n</div>\n<div id=\"publisher\"></div>\n<div id=\"subscriber\"></div>"
 
 /***/ }),
 
@@ -1107,10 +1098,11 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "VideoSessionComponent", function() { return VideoSessionComponent; });
 /* harmony import */ var _angular_core__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! @angular/core */ "./node_modules/@angular/core/fesm5/core.js");
 /* harmony import */ var _angular_common__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! @angular/common */ "./node_modules/@angular/common/fesm5/common.js");
-/* harmony import */ var openvidu_browser__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! openvidu-browser */ "./node_modules/openvidu-browser/lib/index.js");
-/* harmony import */ var openvidu_browser__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(openvidu_browser__WEBPACK_IMPORTED_MODULE_2__);
-/* harmony import */ var _services_video_session_service__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../../services/video-session.service */ "./src/app/services/video-session.service.ts");
-/* harmony import */ var _services_authentication_service__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../../services/authentication.service */ "./src/app/services/authentication.service.ts");
+/* harmony import */ var _angular_material__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! @angular/material */ "./node_modules/@angular/material/esm5/material.es5.js");
+/* harmony import */ var openvidu_browser__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! openvidu-browser */ "./node_modules/openvidu-browser/lib/index.js");
+/* harmony import */ var openvidu_browser__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(openvidu_browser__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var _services_video_session_service__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ../../services/video-session.service */ "./src/app/services/video-session.service.ts");
+/* harmony import */ var _services_authentication_service__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ../../services/authentication.service */ "./src/app/services/authentication.service.ts");
 var __decorate = (undefined && undefined.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
@@ -1125,18 +1117,20 @@ var __metadata = (undefined && undefined.__metadata) || function (k, v) {
 
 
 
+
 var VideoSessionComponent = /** @class */ (function () {
-    function VideoSessionComponent(location, authenticationService, videoSessionService) {
+    function VideoSessionComponent(location, authenticationService, videoSessionService, snackBar) {
         this.location = location;
         this.authenticationService = authenticationService;
         this.videoSessionService = videoSessionService;
+        this.snackBar = snackBar;
     }
     VideoSessionComponent.prototype.OPEN_VIDU_CONNECTION = function () {
         // 0) Obtain 'token' from server
         // In this case, the method ngOnInit takes care of it
         var _this = this;
         // 1) Initialize OpenVidu and your Session
-        this.OV = new openvidu_browser__WEBPACK_IMPORTED_MODULE_2__["OpenVidu"]();
+        this.OV = new openvidu_browser__WEBPACK_IMPORTED_MODULE_3__["OpenVidu"]();
         this.session = this.OV.initSession();
         // 2) Specify the actions when events take place
         this.session.on('streamCreated', function (event) {
@@ -1162,6 +1156,9 @@ var VideoSessionComponent = /** @class */ (function () {
         this.session.on('connectionDestroyed', function (event) {
             console.warn('OTHER USER\'S CONNECTION DESTROYED!');
             console.warn(event.connection);
+            if (_this.authenticationService.connectionBelongsToTeacher(event.connection)) {
+                _this.location.back();
+            }
         });
         // 3) Connect to the session
         this.session.connect(this.token, 'CLIENT:' + this.authenticationService.getCurrentUser().name)
@@ -1212,6 +1209,12 @@ var VideoSessionComponent = /** @class */ (function () {
                 _this.OPEN_VIDU_CONNECTION();
             }, function (error) {
                 console.log(error);
+                if (error.status === 409) {
+                    _this.snackBar.open('The teacher has not opened the lesson yet!', 'Undo', {
+                        duration: 3000
+                    });
+                    _this.location.back();
+                }
             });
         }
         // Specific aspects of this concrete application
@@ -1306,10 +1309,12 @@ var VideoSessionComponent = /** @class */ (function () {
         this.cameraOptions = this.videoSessionService.cameraOptions;
     };
     VideoSessionComponent.prototype.afterConnectionStuff = function () {
-        this.localVideoActivated = this.cameraOptions.videoSource !== false;
-        this.localAudioActivated = this.cameraOptions.audioSource !== false;
-        this.videoIcon = this.localVideoActivated ? 'videocam' : 'videocam_off';
-        this.audioIcon = this.localAudioActivated ? 'mic' : 'mic_off';
+        if (this.authenticationService.isTeacher()) {
+            this.localVideoActivated = this.cameraOptions.publishVideo !== false;
+            this.localAudioActivated = this.cameraOptions.publishAudio !== false;
+            this.videoIcon = this.localVideoActivated ? 'videocam' : 'videocam_off';
+            this.audioIcon = this.localAudioActivated ? 'mic' : 'mic_off';
+        }
         this.fullscreenIcon = 'fullscreen';
     };
     VideoSessionComponent = __decorate([
@@ -1319,8 +1324,9 @@ var VideoSessionComponent = /** @class */ (function () {
             styles: [__webpack_require__(/*! ./video-session.component.css */ "./src/app/components/video-session/video-session.component.css")]
         }),
         __metadata("design:paramtypes", [_angular_common__WEBPACK_IMPORTED_MODULE_1__["Location"],
-            _services_authentication_service__WEBPACK_IMPORTED_MODULE_4__["AuthenticationService"],
-            _services_video_session_service__WEBPACK_IMPORTED_MODULE_3__["VideoSessionService"]])
+            _services_authentication_service__WEBPACK_IMPORTED_MODULE_5__["AuthenticationService"],
+            _services_video_session_service__WEBPACK_IMPORTED_MODULE_4__["VideoSessionService"],
+            _angular_material__WEBPACK_IMPORTED_MODULE_2__["MatSnackBar"]])
     ], VideoSessionComponent);
     return VideoSessionComponent;
 }());
@@ -1591,6 +1597,9 @@ var AuthenticationService = /** @class */ (function () {
     AuthenticationService.prototype.updateUserLessons = function (lessons) {
         this.getCurrentUser().lessons = lessons;
     };
+    AuthenticationService.prototype.connectionBelongsToTeacher = function (connection) {
+        return connection.data.indexOf('teacher@gmail.com') > -1;
+    };
     AuthenticationService = __decorate([
         Object(_angular_core__WEBPACK_IMPORTED_MODULE_2__["Injectable"])(),
         __metadata("design:paramtypes", [_angular_http__WEBPACK_IMPORTED_MODULE_3__["Http"], _angular_router__WEBPACK_IMPORTED_MODULE_4__["Router"]])
@@ -1841,7 +1850,7 @@ var VideoSessionService = /** @class */ (function () {
     };
     VideoSessionService.prototype.handleError = function (error) {
         console.error(error);
-        return Object(rxjs__WEBPACK_IMPORTED_MODULE_0__["throwError"])('Server error (' + error.status + '): ' + error.text());
+        return Object(rxjs__WEBPACK_IMPORTED_MODULE_0__["throwError"])(error);
     };
     VideoSessionService = __decorate([
         Object(_angular_core__WEBPACK_IMPORTED_MODULE_2__["Injectable"])(),
@@ -1908,7 +1917,7 @@ Object(_angular_platform_browser_dynamic__WEBPACK_IMPORTED_MODULE_1__["platformB
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-module.exports = __webpack_require__(/*! /opt/src/angular/frontend/src/main.ts */"./src/main.ts");
+module.exports = __webpack_require__(/*! /home/pablo/Documents/Git/classroom-demo/src/angular/frontend/src/main.ts */"./src/main.ts");
 
 
 /***/ })

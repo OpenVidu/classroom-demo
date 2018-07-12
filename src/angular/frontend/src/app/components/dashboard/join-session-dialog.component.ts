@@ -71,8 +71,8 @@ export class JoinSessionDialogComponent {
 
     joinSession() {
         const cameraOptions: PublisherProperties = {
-            audioSource: (!this.joinWithAudio) ? false : undefined,
-            videoSource: (!this.joinWithVideo) ? false : undefined,
+            publishAudio: (!this.joinWithAudio) ? false : true,
+            publishVideo: (!this.joinWithVideo) ? false : true,
             resolution: this.getResolution()
         };
         this.myReference.close(cameraOptions);

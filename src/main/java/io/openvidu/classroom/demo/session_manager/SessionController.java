@@ -115,7 +115,7 @@ public class SessionController {
 		
 		if (this.lessonIdSession.get(id_lesson) == null){
 			System.out.println("There's no Session fot this lesson");
-			return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+			return new ResponseEntity<>(HttpStatus.CONFLICT);
 		}
 		
 		Session session = this.lessonIdSession.get(id_lesson);

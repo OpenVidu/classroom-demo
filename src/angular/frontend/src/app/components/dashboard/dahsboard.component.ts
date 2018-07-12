@@ -54,19 +54,23 @@ export class DashboardComponent implements OnInit {
     }
 
     goToLesson(lesson: Lesson) {
-        let dialogRef: MatDialogRef<JoinSessionDialogComponent>;
-        dialogRef = this.dialog.open(JoinSessionDialogComponent);
-        dialogRef.componentInstance.myReference = dialogRef;
+        this.videoSessionService.lesson = lesson;
+        if (this.authenticationService.isTeacher()) {
+            let dialogRef: MatDialogRef<JoinSessionDialogComponent>;
+            dialogRef = this.dialog.open(JoinSessionDialogComponent);
+            dialogRef.componentInstance.myReference = dialogRef;
 
-        dialogRef.afterClosed().subscribe((cameraOptions: PublisherProperties) => {
-            if (!!cameraOptions) {
-                console.log('Joining session with options:');
-                console.log(cameraOptions);
-                this.videoSessionService.lesson = lesson;
-                this.videoSessionService.cameraOptions = cameraOptions;
-                this.router.navigate(['/lesson/' + lesson.id]);
-            }
-        });
+            dialogRef.afterClosed().subscribe((cameraOptions: PublisherProperties) => {
+                if (!!cameraOptions) {
+                    console.log('Joining session with options:');
+                    console.log(cameraOptions);
+                    this.videoSessionService.cameraOptions = cameraOptions;
+                    this.router.navigate(['/lesson/' + lesson.id]);
+                }
+            });
+        } else {
+            this.router.navigate(['/lesson/' + lesson.id]);
+        }
     }
 
     goToLessonDetails(lesson: Lesson) {
@@ -91,28 +95,6 @@ export class DashboardComponent implements OnInit {
                 this.snackBar.open('There has been a problem...', undefined, { duration: 3000 });
             }
         );
-    }
-
-    createSession(lessonId: number) {
-        this.videoSessionService.createSession(lessonId).subscribe(
-            () => {
-                console.log('Session created');
-            },
-            error => {
-                console.log(error);
-            }
-        )
-    }
-
-    generateToken(lessonId: number) {
-        this.videoSessionService.generateToken(lessonId).subscribe(
-            response => {
-                console.log(response.text());
-            },
-            error => {
-                console.log(error);
-            }
-        )
     }
 
 }

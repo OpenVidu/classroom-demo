@@ -2,11 +2,10 @@ import { throwError as observableThrowError, Observable } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 
 import { Injectable } from '@angular/core';
-import { Http, RequestOptions, Headers, Response } from '@angular/http';
+import { Http, RequestOptions, Headers } from '@angular/http';
 import { Router } from '@angular/router';
 
-import { environment } from '../../environments/environment';
-
+import { Connection } from 'openvidu-browser';
 import { User } from '../models/user';
 
 @Injectable()
@@ -142,6 +141,10 @@ export class AuthenticationService {
 
     updateUserLessons(lessons) {
         this.getCurrentUser().lessons = lessons;
+    }
+
+    connectionBelongsToTeacher(connection: Connection) {
+        return connection.data.indexOf('teacher@gmail.com') > -1;
     }
 }
 
