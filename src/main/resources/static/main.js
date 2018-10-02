@@ -11,7 +11,7 @@ function webpackEmptyAsyncContext(req) {
 	// Here Promise.resolve().then() is used instead of new Promise() to prevent
 	// uncaught exception popping up in devtools
 	return Promise.resolve().then(function() {
-		var e = new Error('Cannot find module "' + req + '".');
+		var e = new Error("Cannot find module '" + req + "'");
 		e.code = 'MODULE_NOT_FOUND';
 		throw e;
 	});
@@ -961,12 +961,12 @@ var PresentationComponent = /** @class */ (function () {
                 console.log('Sign up succesful!');
             }, function (error) {
                 console.log('Sign up failed (error): ' + error);
-                if (error === 409) {
+                if (error === 409) { // CONFLICT: Email already in use
                     _this.errorTitle = 'Invalid email';
                     _this.errorContent = 'That email is already in use';
                     _this.customClass = 'fail';
                 }
-                else if (error === 403) {
+                else if (error === 403) { // FORBIDDEN: Invalid email format
                     _this.errorTitle = 'Invalid email format';
                     _this.errorContent = 'Our server has rejected that email';
                     _this.customClass = 'fail';
