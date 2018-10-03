@@ -16,13 +16,12 @@
   margin-bottom: 5px;
 }
 
-
 /*Rotating animation*/
 
 @-webkit-keyframes rotating
 /* Safari and Chrome */
 
-{
+  {
   from {
     -ms-transform: rotate(360deg);
     -moz-transform: rotate(360deg);
@@ -68,6 +67,5 @@
 .rotating:hover {
   color: inherit !important;
 }
-
 
 /*End rotating animation*/

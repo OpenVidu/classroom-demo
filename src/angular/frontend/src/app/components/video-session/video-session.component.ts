@@ -1,12 +1,11 @@
-import { Component, OnInit, OnDestroy, AfterViewInit } from '@angular/core';
 import { Location } from '@angular/common';
+import { AfterViewInit, Component, OnDestroy, OnInit } from '@angular/core';
 import { MatSnackBar } from '@angular/material';
-import { OpenVidu, Session, Publisher, StreamEvent, ConnectionEvent, PublisherProperties } from 'openvidu-browser';
-
-import { VideoSessionService } from '../../services/video-session.service';
-import { AuthenticationService } from '../../services/authentication.service';
-
+import { ConnectionEvent, OpenVidu, Publisher, PublisherProperties, Session, StreamEvent } from 'openvidu-browser';
 import { Lesson } from '../../models/lesson';
+import { AuthenticationService } from '../../services/authentication.service';
+import { VideoSessionService } from '../../services/video-session.service';
+
 
 @Component({
     selector: 'app-video-session',
@@ -32,8 +31,8 @@ export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit {
     fullscreenIcon: string;
 
     constructor(
-        private location: Location,
-        private authenticationService: AuthenticationService,
+        public location: Location,
+        public authenticationService: AuthenticationService,
         private videoSessionService: VideoSessionService,
         private snackBar: MatSnackBar) { }
 

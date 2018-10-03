@@ -1,13 +1,11 @@
-import { throwError as observableThrowError, Observable } from 'rxjs';
-import { map, catchError } from 'rxjs/operators';
-
 import { Injectable } from '@angular/core';
-import { Http, Headers, RequestOptions } from '@angular/http';
-
-import { Lesson } from '../models/lesson';
-
-import { AuthenticationService } from './authentication.service';
+import { Headers, Http, RequestOptions } from '@angular/http';
 import { PublisherProperties } from 'openvidu-browser';
+import { throwError as observableThrowError } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
+import { Lesson } from '../models/lesson';
+import { AuthenticationService } from './authentication.service';
+
 
 @Injectable()
 export class VideoSessionService {

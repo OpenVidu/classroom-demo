@@ -1,10 +1,9 @@
-import { throwError as observableThrowError, Observable } from 'rxjs';
-import { map, catchError } from 'rxjs/operators';
-
 import { Injectable } from '@angular/core';
-import { Http, Headers, RequestOptions, Response } from '@angular/http';
-
+import { Headers, Http, RequestOptions } from '@angular/http';
+import { throwError as observableThrowError } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 import { User } from '../models/user';
+
 
 @Injectable()
 export class UserService {

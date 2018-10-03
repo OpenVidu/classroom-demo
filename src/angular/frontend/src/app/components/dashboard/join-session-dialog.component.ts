@@ -1,6 +1,5 @@
 import { Component } from '@angular/core';
 import { MatDialogRef } from '@angular/material';
-
 import { PublisherProperties } from 'openvidu-browser';
 
 @Component({
@@ -63,9 +62,9 @@ import { PublisherProperties } from 'openvidu-browser';
 export class JoinSessionDialogComponent {
 
     public myReference: MatDialogRef<JoinSessionDialogComponent>;
-    private quality = 'medium';
-    private joinWithVideo = true;
-    private joinWithAudio = true;
+    quality = 'medium';
+    joinWithVideo = true;
+    joinWithAudio = true;
 
     constructor() { }
 

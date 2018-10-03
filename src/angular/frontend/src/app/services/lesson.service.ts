@@ -1,15 +1,12 @@
-import { throwError as observableThrowError, Observable } from 'rxjs';
-import { map, catchError } from 'rxjs/operators';
-
 import { Injectable } from '@angular/core';
-import { Http, Headers, RequestOptions, Response } from '@angular/http';
-import { environment } from '../../environments/environment';
-
+import { Headers, Http, RequestOptions, Response } from '@angular/http';
+import { throwError as observableThrowError } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
+import 'rxjs/Rx';
 import { Lesson } from '../models/lesson';
 import { User } from '../models/user';
 import { AuthenticationService } from './authentication.service';
 
-import 'rxjs/Rx';
 
 @Injectable()
 export class LessonService {

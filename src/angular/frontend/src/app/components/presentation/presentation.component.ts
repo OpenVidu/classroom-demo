@@ -1,30 +1,30 @@
-import { Component, OnInit, AfterViewChecked } from '@angular/core';
+import { AfterViewChecked, Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { AuthenticationService } from '../../services/authentication.service';
 import { UserService } from '../../services/user.service';
+
 
 @Component({
   selector: 'app-presentation',
   templateUrl: './presentation.component.html',
   styleUrls: ['./presentation.component.css']
 })
-
 export class PresentationComponent implements OnInit, AfterViewChecked {
 
-  private email: string;
-  private password: string;
-  private confirmPassword: string;
-  private nickName: string;
-  private roleUserSignup = 'student';
+  email: string;
+  password: string;
+  loginView = true;
+  fieldsIncorrect: boolean;
+  submitProcessing: boolean;
 
-  private loginView = true;
-  private fieldsIncorrect: boolean;
-  private submitProcessing: boolean;
+  confirmPassword: string;
+  nickName: string;
+  roleUserSignup = 'student';
 
   // Error message content
-  private errorTitle: string;
-  private errorContent: string;
-  private customClass: string;
+  errorTitle: string;
+  errorContent: string;
+  customClass: string;
 
   constructor(
     private authenticationService: AuthenticationService,
@@ -93,12 +93,10 @@ export class PresentationComponent implements OnInit, AfterViewChecked {
       this.errorContent = '';
       this.customClass = 'fail';
       this.handleError();
-    }
+    } else {
 
-    else {
-
-      let userNameFixed = this.email;
-      let userPasswordFixed = this.password;
+      const userNameFixed = this.email;
+      const userPasswordFixed = this.password;
 
       this.userService.newUser(userNameFixed, userPasswordFixed, this.nickName, this.roleUserSignup).subscribe(
         result => {

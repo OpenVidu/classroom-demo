@@ -1,15 +1,12 @@
-import { map } from 'rxjs/operators';
-
-import { Component, Input, OnInit } from '@angular/core';
-import { ActivatedRoute, Params, Router } from '@angular/router';
 import { Location } from '@angular/common';
+import { Component, OnInit } from '@angular/core';
 import { MatSnackBar } from '@angular/material';
-
+import { ActivatedRoute, Params, Router } from '@angular/router';
 import { Lesson } from '../../models/lesson';
 import { User } from '../../models/user';
-
-import { LessonService } from '../../services/lesson.service';
 import { AuthenticationService } from '../../services/authentication.service';
+import { LessonService } from '../../services/lesson.service';
+
 
 @Component({
     selector: 'app-lesson-details',
@@ -37,8 +34,8 @@ export class LessonDetailsComponent implements OnInit {
 
     constructor(
         private lessonService: LessonService,
-        private authenticationService: AuthenticationService,
-        private router: Router,
+        public authenticationService: AuthenticationService,
+        public router: Router,
         private route: ActivatedRoute,
         private location: Location,
         public snackBar: MatSnackBar

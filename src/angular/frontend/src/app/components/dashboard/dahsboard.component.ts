@@ -1,15 +1,13 @@
-import { Component, OnInit, EventEmitter } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, OnInit } from '@angular/core';
 import { MatDialog, MatDialogRef, MatSnackBar } from '@angular/material';
-
+import { Router } from '@angular/router';
+import { PublisherProperties } from 'openvidu-browser';
 import { Lesson } from '../../models/lesson';
-
+import { AuthenticationService } from '../../services/authentication.service';
 import { LessonService } from '../../services/lesson.service';
 import { VideoSessionService } from '../../services/video-session.service';
-import { AuthenticationService } from '../../services/authentication.service';
-
 import { JoinSessionDialogComponent } from './join-session-dialog.component';
-import { PublisherProperties } from 'openvidu-browser';
+
 
 @Component({
     selector: 'app-dashboard',
@@ -22,13 +20,13 @@ export class DashboardComponent implements OnInit {
 
     addingLesson: false;
     lessonTitle: string;
-    sumbitNewLesson: boolean;
+    submitNewLesson: boolean;
 
     constructor(
         private lessonService: LessonService,
         private videoSessionService: VideoSessionService,
-        private authenticationService: AuthenticationService,
         private router: Router,
+        public authenticationService: AuthenticationService,
         public snackBar: MatSnackBar,
         public dialog: MatDialog
     ) { }
@@ -78,20 +76,20 @@ export class DashboardComponent implements OnInit {
     }
 
     newLesson() {
-        this.sumbitNewLesson = true;
+        this.submitNewLesson = true;
         this.lessonService.newLesson(new Lesson(this.lessonTitle)).subscribe(
             lesson => {
                 console.log('New lesson added: ');
                 console.log(lesson);
                 this.lessons.push(lesson);
                 this.authenticationService.updateUserLessons(this.lessons);
-                this.sumbitNewLesson = false;
+                this.submitNewLesson = false;
                 this.snackBar.open('Lesson added!', undefined, { duration: 3000 });
                 this.addingLesson = false;
             },
             error => {
                 console.log(error);
-                this.sumbitNewLesson = false;
+                this.submitNewLesson = false;
                 this.snackBar.open('There has been a problem...', undefined, { duration: 3000 });
             }
         );

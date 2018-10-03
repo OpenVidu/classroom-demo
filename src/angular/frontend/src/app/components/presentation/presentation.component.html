@@ -22,20 +22,22 @@
 
             <div *ngIf="!loginView">
               <mat-form-field>
-                <input matInput placeholder="Name" [(ngModel)]="nickName" name="nickName" id="nickName" type="text" autocomplete="off" required>
+                <input matInput placeholder="Name" [(ngModel)]="nickName" name="nickName" id="nickName" type="text"
+                  autocomplete="off" required>
               </mat-form-field>
             </div>
 
             <div>
               <mat-form-field>
-                <input matInput placeholder="Password" [(ngModel)]="password" name="password" id="password" type="password" required>
+                <input matInput placeholder="Password" [(ngModel)]="password" name="password" id="password" type="password"
+                  required>
               </mat-form-field>
             </div>
 
             <div *ngIf="!loginView">
               <mat-form-field>
-                <input matInput placeholder="Confirm password" [(ngModel)]="confirmPassword" name="confirmPassword" id="confirmPassword" type="password"
-                  autocomplete="off" required>
+                <input matInput placeholder="Confirm password" [(ngModel)]="confirmPassword" name="confirmPassword" id="confirmPassword"
+                  type="password" autocomplete="off" required>
               </mat-form-field>
             </div>
 
@@ -47,8 +49,8 @@
               </mat-radio-group>
             </div>
 
-            <app-error-message *ngIf="fieldsIncorrect" (eventShowable)="fieldsIncorrect = false" [errorTitle]="errorTitle" [errorContent]="errorContent"
-              [customClass]="customClass" [closable]="true"></app-error-message>
+            <app-error-message *ngIf="fieldsIncorrect" (eventShowable)="fieldsIncorrect = false" [errorTitle]="errorTitle"
+              [errorContent]="errorContent" [customClass]="customClass" [closable]="true"></app-error-message>
 
             <div class="btn-container">
               <button mat-raised-button color="accent" type="submit" *ngIf="loginView" id="log-in-btn">Log in</button>
@@ -81,8 +83,10 @@
         </mat-card-content>
 
         <mat-card-actions>
-          <div *ngIf="loginView">Not registered yet?<button mat-button (click)="setLoginView(false); myForm.reset()" class="card-button">Sign up</button></div>
-          <div *ngIf="!loginView">Already registered?<button mat-button (click)="setLoginView(true); myForm.reset()" class="card-button">Log in</button></div>
+          <div *ngIf="loginView">Not registered yet?<button mat-button (click)="setLoginView(false); myForm.reset()"
+              class="card-button">Sign up</button></div>
+          <div *ngIf="!loginView">Already registered?<button mat-button (click)="setLoginView(true); myForm.reset()"
+              class="card-button">Log in</button></div>
         </mat-card-actions>
 
       </mat-card>

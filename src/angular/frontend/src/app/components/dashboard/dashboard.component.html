@@ -13,14 +13,14 @@
 
     <div *ngIf="addingLesson">
       <div>NEW LESSON</div>
-      <form #newLessonForm (ngSubmit)="newLesson(); newLessonForm.reset()" [class.filtered]="sumbitNewLesson">
+      <form #newLessonForm (ngSubmit)="newLesson(); newLessonForm.reset()" [class.filtered]="submitNewLesson">
         <mat-form-field>
-          <input matInput placeholder="Title" [(ngModel)]="lessonTitle" name="lessonTitle" id="lessonTitle" type="text" autocomplete="off"
-            required>
+          <input matInput placeholder="Title" [(ngModel)]="lessonTitle" name="lessonTitle" id="lessonTitle" type="text"
+            autocomplete="off" required>
         </mat-form-field>
         <div class="block-btn">
-          <button mat-button type="submit" [disabled]="sumbitNewLesson">Send</button>
-          <button mat-button (click)="addingLesson = false; newLessonForm.reset()" [disabled]="sumbitNewLesson">Cancel</button>
+          <button mat-button type="submit" [disabled]="submitNewLesson">Send</button>
+          <button mat-button (click)="addingLesson = false; newLessonForm.reset()" [disabled]="submitNewLesson">Cancel</button>
         </div>
       </form>
     </div>
@@ -28,15 +28,15 @@
     <mat-card *ngFor="let lesson of lessons">
       <div fxLayout="row" fxLayoutAlign="center center" fxLayoutGap="10px">
         <span fxFlex="70%" class="title">{{lesson.title}}</span>
-        <span fxFlex="70%" *ngIf="this.authenticationService.isStudent()" class="teacher">{{lesson.teacher.nickName}}</span>
-        <mat-icon fxFlex="15%" *ngIf="this.authenticationService.isTeacher()" (click)="goToLessonDetails(lesson)" [title]="'Modify lesson'">mode_edit</mat-icon>
+        <span fxFlex="70%" *ngIf="authenticationService.isStudent()" class="teacher">{{lesson.teacher.nickName}}</span>
+        <mat-icon fxFlex="15%" *ngIf="authenticationService.isTeacher()" (click)="goToLessonDetails(lesson)" [title]="'Modify lesson'">mode_edit</mat-icon>
         <mat-icon fxFlex="15%" (click)="goToLesson(lesson)" [title]="'Go to lesson!'">play_circle_filled</mat-icon>
       </div>
     </mat-card>
 
     <div *ngIf="lessons.length === 0 && authenticationService.isStudent() && !addingLesson">
-      <app-error-message [errorTitle]="'You do not have any lessons'" [errorContent]="'Your teacher must invite you'" [customClass]="'warning'"
-        [closable]="false"></app-error-message>
+      <app-error-message [errorTitle]="'You do not have any lessons'" [errorContent]="'Your teacher must invite you'"
+        [customClass]="'warning'" [closable]="false"></app-error-message>
     </div>
 
     <div *ngIf="lessons.length === 0 && authenticationService.isTeacher() && !addingLesson">

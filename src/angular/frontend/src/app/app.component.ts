@@ -1,8 +1,8 @@
-import { Component, NgModule } from '@angular/core';
+import { Component } from '@angular/core';
 import { Router } from '@angular/router';
-
-import { AuthenticationService } from './services/authentication.service';
 import { routerTransition } from './router.animation';
+import { AuthenticationService } from './services/authentication.service';
+
 
 @Component({
   selector: 'app-root',
@@ -12,7 +12,9 @@ import { routerTransition } from './router.animation';
 })
 export class AppComponent {
 
-  constructor(private router: Router, private authenticationService: AuthenticationService) { }
+  constructor(public router: Router, public authenticationService: AuthenticationService) {
+
+  }
 
   isVideoSessionUrl() {
     return (this.router.url.substring(0, '/lesson/'.length) === '/lesson/');

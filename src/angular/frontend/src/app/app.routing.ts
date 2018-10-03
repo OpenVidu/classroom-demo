@@ -1,13 +1,12 @@
 import { ModuleWithProviders } from '@angular/core';
-import { Routes, RouterModule } from '@angular/router';
-
-import { PresentationComponent } from './components/presentation/presentation.component';
+import { RouterModule, Routes } from '@angular/router';
+import { AuthGuard } from './auth.guard';
 import { DashboardComponent } from './components/dashboard/dahsboard.component';
 import { LessonDetailsComponent } from './components/lesson-details/lesson-details.component';
+import { PresentationComponent } from './components/presentation/presentation.component';
 import { ProfileComponent } from './components/profile/profile.component';
 import { VideoSessionComponent } from './components/video-session/video-session.component';
 
-import { AuthGuard } from './auth.guard';
 
 const appRoutes: Routes = [
   {
@@ -42,4 +41,4 @@ const appRoutes: Routes = [
   },
 ];
 
-export const routing: ModuleWithProviders = RouterModule.forRoot(appRoutes, {useHash: true});
+export const routing: ModuleWithProviders = RouterModule.forRoot(appRoutes, { useHash: true });
