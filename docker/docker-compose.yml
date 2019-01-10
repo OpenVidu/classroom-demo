@@ -15,12 +15,12 @@ services:
     links:
       - demo-mysql:mysql
     ports:
+      - 4443:4443
       - 5000:5000
-      - 3000:3000
     environment:
       - WAIT_HOSTS=mysql:3306
       - WAIT_HOSTS_TIMEOUT=120
       - KMS_STUN_IP=stun.l.google.com
       - KMS_STUN_PORT=19302
       - openvidu.secret=MY_SECRET
-  
+      - openvidu.publicurl=${OPENVIDU_PUBLICURL}

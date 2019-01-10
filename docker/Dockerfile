@@ -9,21 +9,9 @@ RUN echo "deb http://ubuntu.openvidu.io/6.9.0 xenial kms6" | tee /etc/apt/source
 	&& rm -rf /var/lib/apt/lists/*
 
 COPY kms.sh /kms.sh
-COPY ngrok.sh /ngrok.sh
 
 # Install Java
 RUN apt-get update && apt-get install -y openjdk-8-jdk && rm -rf /var/lib/apt/lists/*
-
-# ngrok
-RUN apt-get update && apt-get install unzip
-RUN set -x \
-    && apt-get update \
-    && apt-get install wget \
-    && wget https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip \
-    && unzip ngrok-stable-linux-amd64.zip -d /home/ngrok \
-    && rm -f ngrok-stable-linux-amd64.zip ngrok
-
-COPY ngrok.yml /home/ngrok/ngrok.yml
 
 # Configure Supervisor
 RUN mkdir -p /var/log/supervisor
@@ -43,19 +31,11 @@ RUN chmod +x /init.sh
 ADD wait.sh wait.sh
 RUN chmod +x /wait.sh
 
-RUN set -x \
-    && echo 'ngrok:x:6737:6737:Ngrok user:/home/ngrok:/bin/false' >> /etc/passwd \
-    && echo 'ngrok:x:6737:' >> /etc/group \
-    && chown ngrok:ngrok /home/ngrok \
-    && chmod -R go=u,go-w /home/ngrok \
-    && chmod go= /home/ngrok
-
 RUN apt-get update
 RUN apt-get install netcat-openbsd
 
 EXPOSE 3000
 EXPOSE 5000
-EXPOSE 4040
 
 # Exec supervisord
 CMD ["/usr/bin/supervisord"]
