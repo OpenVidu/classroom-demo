@@ -20,9 +20,11 @@ import io.openvidu.classroom.demo.lesson.LessonRepository;
 import io.openvidu.classroom.demo.user.User;
 import io.openvidu.classroom.demo.user.UserComponent;
 import io.openvidu.java.client.OpenVidu;
+import io.openvidu.java.client.OpenViduHttpException;
+import io.openvidu.java.client.OpenViduJavaClientException;
+import io.openvidu.java.client.OpenViduRole;
 import io.openvidu.java.client.Session;
 import io.openvidu.java.client.TokenOptions;
-import io.openvidu.java.client.OpenViduRole;
 
 @RestController
 @RequestMapping("/api-sessions")
@@ -73,8 +75,8 @@ public class SessionController {
 		}
 
 		if (this.lessonIdSession.get(id_lesson) != null) {
-			// If there's already a valid sessionId for this lesson, not necessary to ask
-			// for a new one
+			// If there's already a valid Session object for this lesson,
+			// it is not necessary to ask for a new one
 			return new ResponseEntity<>(HttpStatus.OK);
 		} else {
 			try {
@@ -109,7 +111,7 @@ public class SessionController {
 		Lesson c = lessonRepository.findById(id_lesson).get();
 
 		if (!checkAuthorizationUsers(c, c.getAttenders())) {
-			System.out.println("Not authorizedd");
+			System.out.println("Not authorized");
 			return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
 		}
 
@@ -122,23 +124,42 @@ public class SessionController {
 		OpenViduRole role = user.hasRoleTeacher() ? OpenViduRole.PUBLISHER : OpenViduRole.SUBSCRIBER;
 
 		JSONObject responseJson = new JSONObject();
-
+		TokenOptions tokenOpts = new TokenOptions.Builder().role(role)
+				.data("SERVER=" + this.user.getLoggedUser().getName()).build();
 		try {
-			// IMPORTANT STUFF
-			TokenOptions tokenOpts = new TokenOptions.Builder().role(role)
-					.data("SERVER=" + this.user.getLoggedUser().getName()).build();
-			String token = (String) this.lessonIdSession.get(id_lesson).generateToken(tokenOpts);
-			// END IMPORTANT STUFF
+			String token = this.lessonIdSession.get(id_lesson).generateToken(tokenOpts);
 
 			this.sessionIdUserIdToken.get(session.getSessionId()).put(this.user.getLoggedUser().getId(), token);
-
 			responseJson.put(0, token);
-
 			showMap();
 
 			return new ResponseEntity<>(responseJson, HttpStatus.OK);
-		} catch (Exception e) {
-			return getErrorResponse(e);
+		} catch (OpenViduJavaClientException e1) {
+			// If internal error generate an error message and return it to client
+			return getErrorResponse(e1);
+		} catch (OpenViduHttpException e2) {
+			if (404 == e2.getStatus()) {
+				// Invalid sessionId (user left unexpectedly). Session object is not valid
+				// anymore. Must clean invalid session and create a new one
+				try {
+					this.sessionIdUserIdToken.remove(session.getSessionId());
+					session = this.openVidu.createSession();
+					this.lessonIdSession.put(id_lesson, session);
+					this.sessionIdUserIdToken.put(session.getSessionId(), new HashMap<>());
+					String token = session.generateToken(tokenOpts);
+					// END IMPORTANT STUFF
+
+					this.sessionIdUserIdToken.get(session.getSessionId()).put(this.user.getLoggedUser().getId(), token);
+					responseJson.put(0, token);
+					showMap();
+
+					return new ResponseEntity<>(responseJson, HttpStatus.OK);
+				} catch (OpenViduJavaClientException | OpenViduHttpException e3) {
+					return getErrorResponse(e3);
+				}
+			} else {
+				return getErrorResponse(e2);
+			}
 		}
 	}
 
