@@ -31,6 +31,8 @@
         <span fxFlex="70%" *ngIf="authenticationService.isStudent()" class="teacher">{{lesson.teacher.nickName}}</span>
         <mat-icon fxFlex="15%" *ngIf="authenticationService.isTeacher()" (click)="goToLessonDetails(lesson)" [title]="'Modify lesson'">mode_edit</mat-icon>
         <mat-icon fxFlex="15%" (click)="goToLesson(lesson)" [title]="'Go to lesson!'">play_circle_filled</mat-icon>
+        <mat-icon fxFlex="15%" (click)="goToLesson3D(lesson)" [title]="'Go to lesson 3D!'">3d_rotation</mat-icon>
+
       </div>
     </mat-card>
 

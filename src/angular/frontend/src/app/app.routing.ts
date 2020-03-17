@@ -6,6 +6,7 @@ import { LessonDetailsComponent } from './components/lesson-details/lesson-detai
 import { PresentationComponent } from './components/presentation/presentation.component';
 import { ProfileComponent } from './components/profile/profile.component';
 import { VideoSessionComponent } from './components/video-session/video-session.component';
+import { VideoSession3DComponent } from './components/video-session3D/video-session3d.component';
 
 
 const appRoutes: Routes = [
@@ -36,6 +37,12 @@ const appRoutes: Routes = [
   {
     path: 'lesson/:id',
     component: VideoSessionComponent,
+    canActivate: [AuthGuard],
+    data: { state: 'session' }
+  },
+  {
+    path: 'lesson/:id/3D',
+    component: VideoSession3DComponent,
     canActivate: [AuthGuard],
     data: { state: 'session' }
   },

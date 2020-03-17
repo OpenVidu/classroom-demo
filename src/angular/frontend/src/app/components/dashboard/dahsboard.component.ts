@@ -71,6 +71,27 @@ export class DashboardComponent implements OnInit {
         }
     }
 
+
+    goToLesson3D(lesson: Lesson) {
+        this.videoSessionService.lesson = lesson;
+        if (this.authenticationService.isTeacher()) {
+            let dialogRef: MatDialogRef<JoinSessionDialogComponent>;
+            dialogRef = this.dialog.open(JoinSessionDialogComponent);
+            dialogRef.componentInstance.myReference = dialogRef;
+
+            dialogRef.afterClosed().subscribe((cameraOptions: PublisherProperties) => {
+                if (!!cameraOptions) {
+                    console.log('Joining session with options:');
+                    console.log(cameraOptions);
+                    this.videoSessionService.cameraOptions = cameraOptions;
+                    this.router.navigate(['/lesson/' + lesson.id + '/3D']);
+                }
+            });
+        } else {
+            this.router.navigate(['/lesson/' + lesson.id + '/3D']);
+        }
+    }
+
     goToLessonDetails(lesson: Lesson) {
         this.router.navigate(['/lesson-details/' + lesson.id]);
     }

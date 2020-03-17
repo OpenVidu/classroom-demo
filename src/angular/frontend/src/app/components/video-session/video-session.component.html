@@ -3,6 +3,7 @@
     <mat-icon class="right-btn" (click)="toggleFullScreen()" [title]="'Fullscreen'">{{fullscreenIcon}}</mat-icon>
     <mat-icon *ngIf="authenticationService.isTeacher()" class="right-btn" (click)="toggleLocalVideo()" [title]="'Toggle video'">{{videoIcon}}</mat-icon>
     <mat-icon *ngIf="authenticationService.isTeacher()" class="right-btn" (click)="toggleLocalAudio()" [title]="'Toggle audio'">{{audioIcon}}</mat-icon>
+    <mat-icon *ngIf="authenticationService.isTeacher()" class="right-btn" (click)="switchVideo()" [title]="'Screen Share'">{{screenIcon}}</mat-icon>
     <h1>{{lesson?.title}}</h1>
 </div>
 <div id="publisher"></div>

@@ -23,6 +23,7 @@ import { AuthenticationService } from './services/authentication.service';
 import { UserService } from './services/user.service';
 import { LessonService } from './services/lesson.service';
 import { VideoSessionService } from './services/video-session.service';
+import { VideoSession3DComponent } from './components/video-session3D/video-session3d.component';
 
 @NgModule({
   declarations: [
@@ -32,6 +33,7 @@ import { VideoSessionService } from './services/video-session.service';
     LessonDetailsComponent,
     ProfileComponent,
     VideoSessionComponent,
+    VideoSession3DComponent,
     ErrorMessageComponent,
     JoinSessionDialogComponent,
   ],

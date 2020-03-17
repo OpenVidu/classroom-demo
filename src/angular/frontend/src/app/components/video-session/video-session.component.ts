@@ -26,8 +26,11 @@ export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit {
 
     localVideoActivated: boolean;
     localAudioActivated: boolean;
+    screenActive: boolean;
+
     videoIcon: string;
     audioIcon: string;
+    screenIcon: string;
     fullscreenIcon: string;
 
     constructor(
@@ -225,6 +228,23 @@ export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit {
         }
     }
 
+    switchVideo() {
+        let videosource = undefined;
+
+        if (!this.screenActive) {
+            videosource = 'screen';
+        }
+        this.screenActive = !this.screenActive;
+
+        this.OV.getUserMedia({
+            audioSource: undefined,
+            videoSource: videosource,
+        }).then(mediaStream => {
+            const newTrack = mediaStream.getVideoTracks()[0];
+            this.publisher.replaceTrack(newTrack);
+        });
+    }
+
     exitFullScreen() {
         const document: any = window.document;
         const fs = document.getElementsByTagName('html')[0];
@@ -250,6 +270,8 @@ export class VideoSessionComponent implements OnInit, OnDestroy, AfterViewInit {
             this.localAudioActivated = this.cameraOptions.publishAudio !== false;
             this.videoIcon = this.localVideoActivated ? 'videocam' : 'videocam_off';
             this.audioIcon = this.localAudioActivated ? 'mic' : 'mic_off';
+            this.screenIcon = this.screenActive ? 'stop_screen_share' : 'screen_share' ;
+
         }
         this.fullscreenIcon = 'fullscreen';
     }

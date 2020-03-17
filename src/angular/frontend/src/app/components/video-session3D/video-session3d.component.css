@@ -1,0 +1,101 @@
+h1 {
+  text-align: center;
+  margin: 0;
+  color: white;
+}
+
+#header-div {
+  position: absolute;
+  z-index: 1000;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  -webkit-touch-callout: none;
+  /* iOS Safari */
+  -webkit-user-select: none;
+  /* Safari */
+  -khtml-user-select: none;
+  /* Konqueror HTML */
+  -moz-user-select: none;
+  /* Firefox */
+  -ms-user-select: none;
+  /* Internet Explorer/Edge */
+  user-select: none;
+}
+
+mat-icon {
+  font-size: 38px;
+  width: 38px;
+  height: 38px;
+  color: white;
+  -webkit-transition: color .2s linear;
+  -moz-transition: color .2s linear;
+  -ms-transition: color .2s linear;
+  -o-transition: color .2s linear;
+  transition: color .2s linear;
+}
+
+mat-icon:hover {
+  color: #ffd740;
+}
+
+#back-btn {
+  float: left;
+}
+
+.right-btn {
+  float: right;
+}
+
+
+#info{
+	padding:10px;
+	color:#fff;
+	position:absolute;
+	background-color:rgba(0,0,0,0.4);
+  }
+
+  #help-text H1 {
+	font-size:18px;
+	margin-top:15px;
+
+  }
+
+  #help-text DIV{
+	margin-bottom:5px;
+  }
+
+  #help-text DIV LABEL{
+	display:inline-block;
+	width:160px;
+  }
+
+  #help-text SECTION {
+	margin-top:20px;
+  }
+
+  #generic_error,
+  #security_error{
+	padding-top:200px;
+	width:500px;
+	margin-left:auto;
+	margin-right:auto;
+	display:none;
+  }
+
+  #logo {
+    width:50px;
+    height:50px;
+    padding:10px;
+    position:absolute;
+    top:0px;
+    right:0px;
+    cursor:pointer;
+    background-color:rgba(0,0,0,0.4);
+    background-image:url(../../../assets/img/oculus_bridge.png);
+    background-repeat:no-repeat;
+    background-position:10px 10px;
+  }
+
+  #logo.offline{
+    background-image:url(../../../assets/img/oculus_bridge_offline.png);
+  }
