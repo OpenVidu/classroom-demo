@@ -15,7 +15,7 @@
         "@angular/router": "7.2.14",
         "core-js": "2.6.5",
         "hammerjs": "2.0.8",
-        "openvidu-browser": "2.13.0",
+        "openvidu-browser": "2.14.0",
         "rxjs": "6.5.1",
         "rxjs-compat": "6.5.1",
         "zone.js": "0.9.0"
@@ -40,5 +40,5 @@
         "start": "ng serve",
         "test": "ng test"
     },
-    "version": "2.13.0"
+    "version": "2.14.0"
 }
