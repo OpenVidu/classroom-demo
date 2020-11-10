@@ -24,7 +24,8 @@ import io.openvidu.java.client.OpenViduHttpException;
 import io.openvidu.java.client.OpenViduJavaClientException;
 import io.openvidu.java.client.OpenViduRole;
 import io.openvidu.java.client.Session;
-import io.openvidu.java.client.TokenOptions;
+import io.openvidu.java.client.ConnectionProperties;
+import io.openvidu.java.client.ConnectionProperties.ConnectionType;
 
 @RestController
 @RequestMapping("/api-sessions")
@@ -124,10 +125,14 @@ public class SessionController {
 		OpenViduRole role = user.hasRoleTeacher() ? OpenViduRole.PUBLISHER : OpenViduRole.SUBSCRIBER;
 
 		JSONObject responseJson = new JSONObject();
-		TokenOptions tokenOpts = new TokenOptions.Builder().role(role)
-				.data("SERVER=" + this.user.getLoggedUser().getName()).build();
+		ConnectionProperties connectionProperties = new ConnectionProperties.Builder()
+			.type(ConnectionType.WEBRTC)
+			.role(role)
+			.data("user_data")
+			.build();
+
 		try {
-			String token = this.lessonIdSession.get(id_lesson).generateToken(tokenOpts);
+			String token = this.lessonIdSession.get(id_lesson).createConnection(connectionProperties).getToken();
 
 			this.sessionIdUserIdToken.get(session.getSessionId()).put(this.user.getLoggedUser().getId(), token);
 			responseJson.put(0, token);
@@ -146,7 +151,7 @@ public class SessionController {
 					session = this.openVidu.createSession();
 					this.lessonIdSession.put(id_lesson, session);
 					this.sessionIdUserIdToken.put(session.getSessionId(), new HashMap<>());
-					String token = session.generateToken(tokenOpts);
+					String token = session.createConnection(connectionProperties).getToken();
 					// END IMPORTANT STUFF
 
 					this.sessionIdUserIdToken.get(session.getSessionId()).put(this.user.getLoggedUser().getId(), token);
