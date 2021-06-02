@@ -9,7 +9,6 @@ COPY ./pom.xml pom.xml
 COPY ./src src
 
 RUN cd src/angular/frontend && \
-	ls -l && \
 	npm install && \
 	./node_modules/@angular/cli/bin/ng build --output-path ../../main/resources/static
 
@@ -21,6 +20,7 @@ COPY --from=frontend-build /classroom-demo/src/main src/main
 
 RUN mvn clean install
 RUN mvn -o package
+RUN mv /classroom-demo/target/classroom-demo-*.war /classroom-demo/target/classroom-demo.war
 
 FROM alpine:3.11
 
@@ -29,9 +29,8 @@ RUN apk update && \
     apk add mysql mysql-client && \
     rm -rf /var/cache/apk/*
 
-
 RUN mkdir -p /opt/classroom-demo
-COPY --from=backend-build /classroom-demo/target/classroom-demo-2.15.0.war /opt/classroom-demo/classroom-demo.jar
+COPY --from=backend-build /classroom-demo/target/classroom-demo.war /opt/classroom-demo/classroom-demo.jar
 # Entrypoint
 COPY ./docker/entrypoint.sh /usr/local/bin
 RUN chmod +x /usr/local/bin/entrypoint.sh
