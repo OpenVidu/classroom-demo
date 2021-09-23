@@ -15,7 +15,7 @@
         "@angular/router": "7.2.14",
         "core-js": "2.6.5",
         "hammerjs": "2.0.8",
-        "openvidu-browser": "2.19.0",
+        "openvidu-browser": "2.20.0",
         "rxjs": "6.5.1",
         "rxjs-compat": "6.5.1",
         "zone.js": "0.9.0"
