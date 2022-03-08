@@ -6,7 +6,7 @@
     "@angular/common": "12.2.16",
     "@angular/compiler": "12.2.16",
     "@angular/core": "12.2.16",
-    "@angular/flex-layout": "11.0.0-beta.33",
+    "@angular/flex-layout": "12.0.0-beta.35",
     "@angular/forms": "12.2.16",
     "@angular/material": "11.2.13",
     "@angular/platform-browser": "12.2.16",
@@ -15,11 +15,11 @@
     "core-js": "2.6.5",
     "openvidu-browser": "2.21.0",
     "rxjs": "6.6.7",
-    "zone.js": "0.11.5"
+    "zone.js": "~0.11.4"
   },
   "devDependencies": {
-    "@angular-devkit/build-angular": "0.1102.18",
-    "@angular/cli": "11.2.18",
+    "@angular-devkit/build-angular": "12.2.16",
+    "@angular/cli": "12.2.16",
     "@angular/compiler-cli": "12.2.16",
     "@types/jasmine": "3.10.3",
     "@types/node": "17.0.21",
