@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Headers, Http, RequestOptions } from '@angular/http';
+import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { Connection } from 'openvidu-browser';
 import { Observable } from 'rxjs';
@@ -17,7 +17,7 @@ export class AuthenticationService {
     private user: User;
     private role: string;
 
-    constructor(private http: Http, private router: Router) {
+    constructor(private http: HttpClient, private router: Router) {
         this.reqIsLogged();
 
         // set token if saved in local storage
@@ -29,21 +29,17 @@ export class AuthenticationService {
 
         console.log('Login service started...');
 
-        const userPass = utf8_to_b64(user + ':' + pass);
-        const headers = new Headers({
-            'Authorization': 'Basic ' + userPass,
-            'X-Requested-With': 'XMLHttpRequest'
-        });
-        const options = new RequestOptions({ headers });
-
-        return this.http.get(this.urlLogIn, options)
-            .pipe(
-                map(response => {
-                    this.processLogInResponse(response);
-                    return this.user;
-                }),
-                catchError(error => Observable.throw(error))
-            );
+        return this.http.get(this.urlLogIn, {
+            headers: {
+                'Authorization': 'Basic ' + utf8_to_b64(user + ':' + pass),
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).pipe(
+            map((response: User) => {
+                this.processLogInResponse(response);
+                return this.user;
+            })
+        );
     }
 
     logOut() {
@@ -77,11 +73,11 @@ export class AuthenticationService {
         );
     }
 
-    private processLogInResponse(response) {
+    private processLogInResponse(user: User) {
         // Correctly logged in
         console.log('Login succesful processing...');
 
-        this.user = (response.json() as User);
+        this.user = user;
 
         localStorage.setItem('login', 'OPENVIDUAPP');
         if (this.user.roles.indexOf('ROLE_TEACHER') !== -1) {
@@ -98,22 +94,18 @@ export class AuthenticationService {
 
         console.log('ReqIsLogged called');
 
-        const headers = new Headers({
-            'X-Requested-With': 'XMLHttpRequest'
-        });
-        const options = new RequestOptions({ headers });
-
-        this.http.get(this.urlLogIn, options)
-            .pipe(
-                map(response => this.processLogInResponse(response)),
-                catchError(error => {
-                    if (error.status !== 401) {
-                        console.error('Error when asking if logged: ' + JSON.stringify(error));
-                        this.logOut();
-                        return Observable.throw(error);
-                    }
-                })
-            );
+        this.http.get(this.urlLogIn, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).pipe(
+            map((response: User) => this.processLogInResponse(response)),
+            catchError(error => {
+                if (error.status !== 401) {
+                    console.error('Error when asking if logged: ' + JSON.stringify(error));
+                    this.logOut();
+                    return Observable.throw(error);
+                }
+            })
+        );
     }
 
     checkCredentials() {

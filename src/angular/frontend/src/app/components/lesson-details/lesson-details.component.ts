@@ -1,7 +1,7 @@
 import { Location } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
-import { MatSnackBar } from '@angular/material';
-import { ActivatedRoute, Params, Router } from '@angular/router';
+import { MatSnackBar } from '@angular/material/snack-bar';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Lesson } from '../../models/lesson';
 import { User } from '../../models/user';
 import { AuthenticationService } from '../../services/authentication.service';
@@ -42,9 +42,9 @@ export class LessonDetailsComponent implements OnInit {
     ) { }
 
     ngOnInit(): void {
-        this.route.params
-            .map((params: Params) => this.lessonService.obtainLocalLesson(+params['id']))
-            .subscribe(lesson => this.lesson = lesson);
+        this.route.params.subscribe(parameter => {
+            this.lesson = this.lessonService.obtainLocalLesson(+parameter['id']);
+        });
     }
 
     editLesson() {
@@ -97,7 +97,7 @@ export class LessonDetailsComponent implements OnInit {
                 console.log('Attender added');
                 console.log(response);
                 this.sumbitAddAttenders = false;
-                const newAttenders = response.attendersAdded as User[];
+                const newAttenders = (<any>response).attendersAdded as User[];
                 this.lesson.attenders = this.lesson.attenders.concat(newAttenders);
                 this.handleAttendersMessage(response);
             },

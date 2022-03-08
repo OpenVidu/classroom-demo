@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Headers, Http, RequestOptions } from '@angular/http';
+import { HttpClient } from '@angular/common/http';
 import { throwError as observableThrowError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { User } from '../models/user';
@@ -10,18 +10,18 @@ export class UserService {
 
   private url = 'api-users';
 
-  constructor(private http: Http) { }
+  constructor(private http: HttpClient) { }
 
   newUser(name: string, pass: string, nickName: string, role: string) {
     const body = JSON.stringify([name, pass, nickName, role]);
-    const headers = new Headers({
-      'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest'
-    });
-    const options = new RequestOptions({ headers });
-    return this.http.post(this.url + '/new', body, options)
-      .pipe(
-        map(response => response.json() as User),
+    return this.http.post(this.url + '/new', body,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      }).pipe(
+        map(response => response as User),
         catchError(error => this.handleError(error))
       );
   }

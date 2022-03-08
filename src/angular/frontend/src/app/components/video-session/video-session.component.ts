@@ -1,6 +1,6 @@
 import { Location } from '@angular/common';
 import { AfterViewInit, Component, OnDestroy, OnInit } from '@angular/core';
-import { MatSnackBar } from '@angular/material';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { ConnectionEvent, OpenVidu, Publisher, PublisherProperties, Session, StreamEvent } from 'openvidu-browser';
 import { Lesson } from '../../models/lesson';
 import { AuthenticationService } from '../../services/authentication.service';

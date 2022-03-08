@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Headers, Http, RequestOptions } from '@angular/http';
+import { HttpClient } from '@angular/common/http';
 import { PublisherProperties } from 'openvidu-browser';
 import { throwError as observableThrowError } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
@@ -15,7 +15,7 @@ export class VideoSessionService {
 
     private url = 'api-sessions';
 
-    constructor(private http: Http, private authenticationService: AuthenticationService) { }
+    constructor(private http: HttpClient, private authenticationService: AuthenticationService) { }
 
     // Returns nothing (HttpResponse)
     createSession(lessonId: number) {
@@ -30,20 +30,16 @@ export class VideoSessionService {
     // Returns {0: sessionId, 1: token}
     generateToken(lessonId: number) {
         const body = JSON.stringify(lessonId);
-        const headers = new Headers({ 'Content-Type': 'application/json' });
-        const options = new RequestOptions({ headers });
-        return this.http.post(this.url + '/generate-token', body, options)
+        return this.http.post(this.url + '/generate-token', body, { headers: { 'Content-Type': 'application/json' } })
             .pipe(
-                map(response => response.json()),
+                map(response => response),
                 catchError(error => this.handleError(error))
             );
     }
 
     removeUser(lessonId: number) {
         const body = JSON.stringify(lessonId);
-        const headers = new Headers({ 'Content-Type': 'application/json' });
-        const options = new RequestOptions({ headers });
-        return this.http.post(this.url + '/remove-user', body, options)
+        return this.http.post(this.url + '/remove-user', body, { headers: { 'Content-Type': 'application/json' } })
             .pipe(
                 map(response => response),
                 catchError(error => this.handleError(error))
