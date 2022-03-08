@@ -54,7 +54,7 @@ public class LessonController {
 		s.add(id_i);
 		Collection<User> users = userRepository.findAllById(s);
 		Collection<Lesson> lessons = new HashSet<>();
-		lessons = lessonRepository.findByAttenders(users);
+		lessons = lessonRepository.findByAttendersIn(users);
 		return new ResponseEntity<>(lessons, HttpStatus.OK);
 	}
 
@@ -137,7 +137,7 @@ public class LessonController {
 		// Removing the deleted lesson from its attenders
 		Collection<Lesson> lessons = new HashSet<>();
 		lessons.add(c);
-		Collection<User> users = userRepository.findByLessons(lessons);
+		Collection<User> users = userRepository.findByLessonsIn(lessons);
 		for (User u : users) {
 			u.getLessons().remove(c);
 		}
@@ -237,7 +237,7 @@ public class LessonController {
 
 		Set<Lesson> setLesson = new HashSet<>();
 		setLesson.add(c);
-		Collection<User> lessonAttenders = userRepository.findByLessons(setLesson);
+		Collection<User> lessonAttenders = userRepository.findByLessonsIn(setLesson);
 
 		for (User attender : lessonAttenders) {
 			if (!lesson.getAttenders().contains(attender)) {
