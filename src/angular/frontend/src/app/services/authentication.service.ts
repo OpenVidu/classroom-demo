@@ -6,6 +6,7 @@ import { Observable } from 'rxjs';
 import { catchError, map } from 'rxjs/operators';
 import { User } from '../models/user';
 
+import { throwError } from 'rxjs';
 
 @Injectable()
 export class AuthenticationService {
@@ -62,7 +63,7 @@ export class AuthenticationService {
 
                     return response;
                 }),
-                catchError(error => Observable.throw(error))
+                catchError(error => throwError(error))
             );
     }
 
@@ -102,7 +103,7 @@ export class AuthenticationService {
                 if (error.status !== 401) {
                     console.error('Error when asking if logged: ' + JSON.stringify(error));
                     this.logOut();
-                    return Observable.throw(error);
+                    return throwError(error);
                 }
             })
         );
