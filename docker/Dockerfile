@@ -10,7 +10,7 @@ COPY ./src src
 
 RUN cd src/angular/frontend && \
 	npm install && \
-	./node_modules/@angular/cli/bin/ng build --output-path ../../main/resources/static
+	npx ng build --output-path ../../main/resources/static
 
 
 FROM maven:3.6.3 as backend-build

@@ -1,6 +1,9 @@
 #!/bin/bash
-pushd ../
-export SOFTWARE_VERSION=$(grep -oPm1 "(?<=<version>)[^<]+" "pom.xml")
+if [ $# -eq 0 ]; then
+    echo "No version argument provided. Usage: \"./create_image.sh X.Y.Z\""
+    exit 1
+fi
 
-docker build -f docker/Dockerfile -t openvidu/openvidu-classroom-demo .
-docker tag openvidu/openvidu-classroom-demo:latest openvidu/openvidu-classroom-demo:$SOFTWARE_VERSION
+pushd ../
+
+docker build -f docker/Dockerfile -t openvidu/openvidu-classroom-demo:"${1}" .
