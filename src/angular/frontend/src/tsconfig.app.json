@@ -9,7 +9,7 @@
       "dom"
     ],
     "outDir": "../out-tsc/app",
-    "target": "es5",
+    "target": "es2020",
     "module": "es2015",
     "baseUrl": "",
     "types": []

@@ -138,7 +138,6 @@
       }
     }
   },
-  "defaultProject": "openvidu-sample-app",
   "schematics": {
     "@schematics/angular:component": {
       "prefix": "app",
