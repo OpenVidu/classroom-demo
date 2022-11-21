@@ -6,10 +6,11 @@
     "declaration": false,
     "moduleResolution": "node",
     "experimentalDecorators": true,
-    "target": "es2020",
+    "target": "ES2022",
     "lib": [
       "es2016",
       "dom"
-    ]
+    ],
+    "useDefineForClassFields": false
   }
 }

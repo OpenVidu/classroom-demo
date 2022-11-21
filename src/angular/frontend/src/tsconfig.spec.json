@@ -9,12 +9,13 @@
     ],
     "outDir": "../out-tsc/spec",
     "module": "commonjs",
-    "target": "es2020",
+    "target": "ES2022",
     "baseUrl": "",
     "types": [
       "jasmine",
       "node"
-    ]
+    ],
+    "useDefineForClassFields": false
   },
   "files": [
     "test.ts",
