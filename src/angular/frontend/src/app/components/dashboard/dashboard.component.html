@@ -25,13 +25,15 @@
       </form>
     </div>
 
-    <mat-card *ngFor="let lesson of lessons">
-      <div fxLayout="row" fxLayoutAlign="center center" fxLayoutGap="10px">
-        <span fxFlex="70%" class="title">{{lesson.title}}</span>
-        <span fxFlex="70%" *ngIf="authenticationService.isStudent()" class="teacher">{{lesson.teacher.nickName}}</span>
-        <mat-icon fxFlex="15%" *ngIf="authenticationService.isTeacher()" (click)="goToLessonDetails(lesson)" [title]="'Modify lesson'">mode_edit</mat-icon>
-        <mat-icon fxFlex="15%" (click)="goToLesson(lesson)" [title]="'Go to lesson!'">play_circle_filled</mat-icon>
-      </div>
+    <mat-card appearance="outlined" *ngFor="let lesson of lessons">
+      <mat-card-content>
+        <div fxLayout="row" fxLayoutAlign="center center" fxLayoutGap="10px">
+          <span fxFlex="70%" class="title">{{lesson.title}}</span>
+          <span fxFlex="70%" *ngIf="authenticationService.isStudent()" class="teacher">{{lesson.teacher.nickName}}</span>
+          <mat-icon fxFlex="15%" *ngIf="authenticationService.isTeacher()" (click)="goToLessonDetails(lesson)" [title]="'Modify lesson'">mode_edit</mat-icon>
+          <mat-icon fxFlex="15%" (click)="goToLesson(lesson)" [title]="'Go to lesson!'">play_circle_filled</mat-icon>
+        </div>
+      </mat-card-content>
     </mat-card>
 
     <div *ngIf="lessons.length === 0 && authenticationService.isStudent() && !addingLesson">

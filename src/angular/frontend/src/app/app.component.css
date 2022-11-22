@@ -24,8 +24,13 @@ header .fill-remaining-space {
 
 header #navbar-logo {
   font-weight: bold;
+  color: white;
 }
 
 footer ul {
   padding-left: 0;
+}
+
+.toolbar-btn {
+  color: white !important;
 }

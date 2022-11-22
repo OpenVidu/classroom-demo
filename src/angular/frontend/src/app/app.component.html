@@ -13,9 +13,9 @@
       </button>
       <span class="fill-remaining-space"></span>
       <div *ngIf="authenticationService.isLoggedIn()" fxLayout="row" fxShow="false" fxShow.gt-sm>
-        <button mat-button routerLink="/lessons">Lessons</button>
-        <button mat-button routerLink="/profile">Profile</button>
-        <button mat-button (click)="authenticationService.directLogOut()">LOGOUT</button>
+        <button mat-button routerLink="/lessons" class="toolbar-btn">Lessons</button>
+        <button mat-button routerLink="/profile" class="toolbar-btn">Profile</button>
+        <button mat-button (click)="authenticationService.directLogOut()" class="toolbar-btn">LOGOUT</button>
       </div>
       <button *ngIf="authenticationService.isLoggedIn()" mat-button fxHide="false" fxHide.gt-sm (click)="sidenav.open()">
         <mat-icon>menu</mat-icon>
