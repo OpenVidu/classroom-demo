@@ -25,7 +25,7 @@ RUN mv /classroom-demo/target/classroom-demo-*.war /classroom-demo/target/classr
 FROM alpine:3.11
 
 RUN apk update && \
-    apk add openjdk8-jre && \
+    apk add openjdk11-jre && \
     apk add mysql mysql-client && \
     rm -rf /var/cache/apk/*
 
