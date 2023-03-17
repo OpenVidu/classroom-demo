@@ -1,37 +1,16 @@
-FROM node:lts-alpine3.12 as frontend-build
+FROM alpine:3.17
 
-WORKDIR /classroom-demo
-
-RUN apk update && \
-    rm -rf /var/cache/apk/*
-
-COPY ./pom.xml pom.xml
-COPY ./src src
-
-RUN cd src/angular/frontend && \
-	npm install && \
-	npx ng build --output-path ../../main/resources/static
-
-
-FROM maven:3.6.3 as backend-build
-WORKDIR /classroom-demo
-COPY --from=frontend-build /classroom-demo/pom.xml pom.xml
-COPY --from=frontend-build /classroom-demo/src/main src/main
-
-RUN mvn clean install
-RUN mvn -o package
-RUN mv /classroom-demo/target/classroom-demo-*.war /classroom-demo/target/classroom-demo.war
-
-FROM alpine:3.11
-
+# Install Java and MySQL
 RUN apk update && \
     apk add openjdk11-jre && \
     apk add mysql mysql-client && \
     rm -rf /var/cache/apk/*
 
+# Copy Java application
 RUN mkdir -p /opt/classroom-demo
-COPY --from=backend-build /classroom-demo/target/classroom-demo.war /opt/classroom-demo/classroom-demo.jar
-# Entrypoint
+COPY ../target/classroom-demo-*.war /opt/classroom-demo/classroom-demo.jars
+
+# Copy entrypoint
 COPY ./docker/entrypoint.sh /usr/local/bin
 RUN chmod +x /usr/local/bin/entrypoint.sh
 

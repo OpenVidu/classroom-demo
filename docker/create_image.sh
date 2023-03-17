@@ -1,9 +1,9 @@
-#!/bin/bash
-if [ $# -eq 0 ]; then
-    echo "No version argument provided. Usage: \"./create_image.sh <IMAGE_NAME>\""
-    exit 1
+#!/bin/bash -x
+
+VERSION=$1
+if [[ ! -z $VERSION ]]; then
+    cd ..
+    docker build --pull --no-cache --rm=true -f docker/Dockerfile -t openvidu/openvidu-classroom-demo:$VERSION .
+else
+    echo "Error: You need to specify a version as first argument"
 fi
-
-pushd ../
-
-docker build -f docker/Dockerfile -t "$1" .
