@@ -60,4 +60,4 @@ JAVA_PROPERTIES=" ${JAVA_PROPERTIES} -Dspring.datasource.url=jdbc:mysql://127.0.
 [ ! -z "${OPENVIDU_SECRET}" ] && JAVA_PROPERTIES=" ${JAVA_PROPERTIES} -Dopenvidu.secret=${OPENVIDU_SECRET}"
 [ ! -z "${SERVER_PORT}" ] && JAVA_PROPERTIES=" ${JAVA_PROPERTIES} -Dserver.port=${SERVER_PORT}"
 
-java ${JAVA_PROPERTIES} -jar /opt/classroom-demo/classroom-demo.jar
+java ${JAVA_PROPERTIES} -jar /opt/classroom-demo/classroom-demo.war

@@ -8,7 +8,7 @@ RUN apk update && \
 
 # Copy Java application
 RUN mkdir -p /opt/classroom-demo
-COPY ../target/classroom-demo-*.war /opt/classroom-demo/classroom-demo.jars
+COPY ../target/classroom-demo-*.war /opt/classroom-demo/classroom-demo.war
 
 # Copy entrypoint
 COPY ./docker/entrypoint.sh /usr/local/bin
